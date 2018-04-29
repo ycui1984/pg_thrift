@@ -37,4 +37,3 @@ postgres=# create extension pg_thrift;
 ```
 postgres=# \dx
 ```
-test

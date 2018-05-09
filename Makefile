@@ -2,7 +2,7 @@ EXTENSION = pg_thrift
 MODULE_big = pg_thrift
 OBJS = pg_thrift.o
 DATA = pg_thrift--1.0.sql
-#REGRESS = pg_thrift
+REGRESS = pg_thrift
 
 PG_CPPFLAGS = -g -O2
 SHLIB_LINK =

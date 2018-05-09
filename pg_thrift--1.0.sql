@@ -1,7 +1,37 @@
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION pg_thrift" to load this file. \quit
 
-CREATE FUNCTION thrift_decode(bytea)
-    RETURNS cstring
+CREATE FUNCTION thrift_binary_get_bool(bytea, int)
+    RETURNS boolean
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_binary_get_byte(bytea, int)
+    RETURNS bytea
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_binary_get_double(bytea, int)
+    RETURNS double precision
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_binary_get_int16(bytea, int)
+    RETURNS int
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_binary_get_int32(bytea, int)
+    RETURNS int
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_binary_get_int64(bytea, int)
+    RETURNS bigint
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_binary_get_string(bytea, int)
+    RETURNS text
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;

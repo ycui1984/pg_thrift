@@ -35,3 +35,23 @@ CREATE FUNCTION thrift_binary_get_string(bytea, int)
     RETURNS text
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_binary_get_struct_bytea(bytea, int)
+    RETURNS bytea
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_binary_get_list_bytea(bytea, int)
+    RETURNS bytea[]
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_binary_get_set_bytea(bytea, int)
+    RETURNS bytea[]
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_binary_get_map_bytea(bytea, int)
+    RETURNS bytea[]
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;

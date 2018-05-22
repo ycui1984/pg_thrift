@@ -4,6 +4,7 @@
 #include <utils/builtins.h>
 #include <utils/array.h>
 #include <utils/lsyscache.h>
+#include "pg_thrift.h"
 
 PG_MODULE_MAGIC;
 
@@ -19,15 +20,21 @@ PG_FUNCTION_INFO_V1(thrift_binary_get_list_bytea);
 PG_FUNCTION_INFO_V1(thrift_binary_get_set_bytea);
 PG_FUNCTION_INFO_V1(thrift_binary_get_map_bytea);
 
-static const char* invalid_thrift = "Invalid thrift data format";
-static const char* invalid_field_type = "Invalid thrift field type";
-
 Datum thrift_binary_decode(uint8* data, Size size, int16 field_id, int8 type_id);
 Datum parse_field(uint8* start, uint8* end, int8 type_id);
 uint8* skip_field(uint8* start, uint8* end, int8 type_id);
 bool is_big_endian(void);
-int64 parse_int(uint8* start, uint8* end, int len);
+int64 parse_int_helper(uint8* start, uint8* end, int len);
 void swap_bytes(char* bytes, int len);
+Datum parse_boolean(uint8* start, uint8* end);
+Datum parse_bytes(uint8* start, uint8* end);
+Datum parse_int16(uint8* start, uint8* end);
+Datum parse_int32(uint8* start, uint8* end);
+Datum parse_int64(uint8* start, uint8* end);
+Datum parse_double(uint8* start, uint8* end);
+Datum parse_struct_bytea(uint8* start, uint8* end);
+Datum parse_list_bytea(uint8* start, uint8* end);
+Datum parse_map_bytea(uint8* start, uint8* end);
 
 bool is_big_endian() {
   uint32 i = 1;
@@ -43,9 +50,9 @@ void swap_bytes(char* bytes, int len) {
   }
 }
 
-int64 parse_int(uint8* start, uint8* end, int len) {
+int64 parse_int_helper(uint8* start, uint8* end, int len) {
   if (start + len >= end) {
-    elog(ERROR, invalid_thrift);
+    elog(ERROR, "Invalid thrift format for int");
   }
   int64 val = 0;
   for (int i = 0; i < len; i++) {
@@ -54,164 +61,197 @@ int64 parse_int(uint8* start, uint8* end, int len) {
   return val;
 }
 
-Datum parse_field(uint8* start, uint8* end, int8 type_id) {
-  // bool
-  if (type_id == 2) {
-    PG_RETURN_BOOL(*(start + 3));
+Datum parse_boolean(uint8* start, uint8* end) {
+  if (start >= end) {
+    elog(ERROR, "Invalid thrift format for bool");
   }
-  // byte or string
-  if (type_id == 3 || type_id == 11) {
-    int32 len = parse_int(start + 3, end, 4);
-    if (start + 6 + len >= end) {
-      elog(ERROR, invalid_thrift);
-    }
-    bytea* ret = palloc(len + VARHDRSZ);
-    memcpy(VARDATA(ret), start + 7, len);
-    SET_VARSIZE(ret, len + VARHDRSZ);
-    PG_RETURN_POINTER(ret);
-  }
-  // float8
-  if (type_id == 4) {
-    if (start + 10 >= end) {
-      elog(ERROR, invalid_thrift);
-    }
-    float8 ret;
-    memcpy(&ret, start + 3, sizeof(float8));
-    if (!is_big_endian()) {
-      swap_bytes((char*)&ret, sizeof(float8));
-    }
-    PG_RETURN_FLOAT8(ret);
-  }
-  // int16
-  if (type_id == 6) {
-    PG_RETURN_INT16(parse_int(start + 3, end, 2));
-  }
-  // int32
-  if (type_id == 8) {
-    PG_RETURN_INT32(parse_int(start + 3, end, 4));
-  }
-  // int64
-  if (type_id == 10) {
-    PG_RETURN_INT64(parse_int(start + 3, end, 8));
-  }
-  // struct
-  if (type_id == 12) {
-    uint8* next_start = skip_field(start + 3, end, 12);
-    int32 len = next_start - (start + 3);
-    bytea* ret = palloc(len + VARHDRSZ);
-    memcpy(VARDATA(ret), start + 3, len);
-    SET_VARSIZE(ret, len + VARHDRSZ);
-    PG_RETURN_POINTER(ret);
-  }
-  // list or set
-  if (type_id == 14 || type_id == 15) {
-    if (start + 7 >= end) {
-      elog(ERROR, invalid_thrift);
-    }
-    int8 element_type = *(start + 3);
-    int32 len = parse_int(start + 4, end, 4);
-    uint8* curr = start + 8;
-    // prepare array
-    Datum ret[256];
-    bool nulls[256], typbyval;
-    int16 typlen;
-    char typalign;
-    get_typlenbyvalalign(BYTEAOID, &typlen, &typbyval, &typalign);
-    for (int i = 0; i < len; i++) {
-      uint8* p = skip_field(curr, end, element_type);
-      ret[i] = palloc(p - curr + VARHDRSZ);
-      nulls[i] = false;
-      memcpy(VARDATA(ret[i]), curr, p - curr);
-      SET_VARSIZE(ret[i], p - curr + VARHDRSZ);
-      curr = p;
-    }
-    int dims[MAXDIM], lbs[MAXDIM], ndims = 1;
-    dims[0] = len; /* number of elements */
-    lbs[0] = 1; /* lower bound is 1 */
-    PG_RETURN_POINTER(
-      construct_md_array(ret, nulls, ndims, dims, lbs, BYTEAOID, typlen, typbyval, typalign)
-    );
-  }
-  // map
-  if (type_id == 13) {
-    if (start + 5 >= end) {
-      elog(ERROR, invalid_thrift);
-    }
-    int32 len = *(start + 2);
-    for (int i = 1; i < 4; i++) {
-      len = (len << 8) + *(start + i + 2);
-    }
-    uint8* curr = start + 6;
+  PG_RETURN_BOOL(*start);
+}
 
-    Datum ret[256];
-    bool nulls[256], typbyval;
-    int16 typlen;
-    char typalign;
-    get_typlenbyvalalign(BYTEAOID, &typlen, &typbyval, &typalign);
-    for (int i = 0; i < 2 * len; i++) {
-      int type_id = (i % 2 == 0? *start : *(start + 1));
-      uint8* p = skip_field(curr, end, type_id);
-      ret[i] = palloc(p - curr + VARHDRSZ);
-      nulls[i] = false;
-      memcpy(VARDATA(ret[i]), curr, p - curr);
-      SET_VARSIZE(ret[i], p - curr + VARHDRSZ);
-      curr = p;
-    }
-    int dims[MAXDIM], lbs[MAXDIM], ndims = 1;
-    dims[0] = 2*len; /* number of elements */
-    lbs[0] = 1; /* lower bound is 1 */
-    PG_RETURN_POINTER(
-      construct_md_array(ret, nulls, ndims, dims, lbs, BYTEAOID, typlen, typbyval, typalign)
-    );
+Datum parse_bytes(uint8* start, uint8* end) {
+  int32 len = parse_int_helper(start, end, BYTE_LEN);
+  if (start + BYTE_LEN + len - 1 >= end) {
+    elog(ERROR, "Invalid thrift format for bytes or string");
   }
-  elog(ERROR, invalid_field_type);
+  bytea* ret = palloc(len + VARHDRSZ);
+  memcpy(VARDATA(ret), start + BYTE_LEN, len);
+  SET_VARSIZE(ret, len + VARHDRSZ);
+  PG_RETURN_POINTER(ret);
+}
+
+Datum parse_double(uint8* start, uint8* end) {
+  if (start + DOUBLE_LEN - 1 >= end) {
+    elog(ERROR, "Invalid thrift format for double");
+  }
+  float8 ret;
+  memcpy(&ret, start, DOUBLE_LEN);
+  if (!is_big_endian()) {
+    swap_bytes((char*)&ret, DOUBLE_LEN);
+  }
+  PG_RETURN_FLOAT8(ret);
+}
+
+Datum parse_int16(uint8* start, uint8* end) {
+  PG_RETURN_INT16(parse_int_helper(start, end, INT16_LEN));
+}
+
+Datum parse_int32(uint8* start, uint8* end) {
+  PG_RETURN_INT32(parse_int_helper(start, end, INT32_LEN));
+}
+
+Datum parse_int64(uint8* start, uint8* end) {
+  PG_RETURN_INT64(parse_int_helper(start, end, INT64_LEN));
+}
+
+Datum parse_struct_bytea(uint8* start, uint8* end) {
+  uint8* next_start = skip_field(start, end, PG_THRIFT_TYPE_STRUCT);
+  int32 len = next_start - start;
+  bytea* ret = palloc(len + VARHDRSZ);
+  memcpy(VARDATA(ret), start, len);
+  SET_VARSIZE(ret, len + VARHDRSZ);
+  PG_RETURN_POINTER(ret);
+}
+
+Datum parse_list_bytea(uint8* start, uint8* end) {
+  if (start + PG_THRIFT_TYPE_LEN + LIST_LEN - 1 >= end) {
+    elog(ERROR, "Invalid thrift format for list");
+  }
+  int8 element_type = *start;
+  int32 len = parse_int_helper(start + PG_THRIFT_TYPE_LEN, end, LIST_LEN);
+  uint8* curr = start + PG_THRIFT_TYPE_LEN + LIST_LEN;
+
+  Datum ret[THRIFT_RESULT_MAX_FIELDS];
+  bool null[THRIFT_RESULT_MAX_FIELDS], typbyval;
+  int16 typlen;
+  char typalign;
+  get_typlenbyvalalign(BYTEAOID, &typlen, &typbyval, &typalign);
+  for (int i = 0; i < len; i++) {
+    uint8* p = skip_field(curr, end, element_type);
+    ret[i] = palloc(p - curr + VARHDRSZ);
+    null[i] = false;
+    memcpy(VARDATA(ret[i]), curr, p - curr);
+    SET_VARSIZE(ret[i], p - curr + VARHDRSZ);
+    curr = p;
+  }
+  int dims[MAXDIM], lbs[MAXDIM], ndims = 1;
+  dims[0] = len;
+  lbs[0] = 1;
+  PG_RETURN_POINTER(
+    construct_md_array(ret, null, ndims, dims, lbs, BYTEAOID, typlen, typbyval, typalign)
+  );
+}
+
+Datum parse_map_bytea(uint8* start, uint8* end) {
+  if (start + 2*PG_THRIFT_TYPE_LEN + INT32_LEN - 1 >= end) {
+    elog(ERROR, "Invalid thrift format for map");
+  }
+  int32 len = parse_int_helper(start + 2*PG_THRIFT_TYPE_LEN, end, INT32_LEN);
+  uint8* curr = start + 2*PG_THRIFT_TYPE_LEN + INT32_LEN;
+  Datum ret[THRIFT_RESULT_MAX_FIELDS];
+  bool null[THRIFT_RESULT_MAX_FIELDS], typbyval;
+  int16 typlen;
+  char typalign;
+  get_typlenbyvalalign(BYTEAOID, &typlen, &typbyval, &typalign);
+  for (int i = 0; i < 2 * len; i++) {
+    int type_id = (i % 2 == 0? *start : *(start + 1));
+    uint8* p = skip_field(curr, end, type_id);
+    ret[i] = palloc(p - curr + VARHDRSZ);
+    null[i] = false;
+    memcpy(VARDATA(ret[i]), curr, p - curr);
+    SET_VARSIZE(ret[i], p - curr + VARHDRSZ);
+    curr = p;
+  }
+  int dims[MAXDIM], lbs[MAXDIM], ndims = 1;
+  dims[0] = 2*len;
+  lbs[0] = 1;
+  PG_RETURN_POINTER(
+    construct_md_array(ret, null, ndims, dims, lbs, BYTEAOID, typlen, typbyval, typalign)
+  );
+}
+
+Datum parse_field(uint8* start, uint8* end, int8 type_id) {
+  if (type_id == PG_THRIFT_TYPE_BOOL) {
+    return parse_boolean(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+  }
+
+  if (type_id == PG_THRIFT_TYPE_BYTE || type_id == PG_THRIFT_TYPE_STRING) {
+    return parse_bytes(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+  }
+
+  if (type_id == PG_THRIFT_TYPE_DOUBLE) {
+    return parse_double(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+  }
+
+  if (type_id == PG_THRIFT_TYPE_INT16) {
+    return parse_int16(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+  }
+
+  if (type_id == PG_THRIFT_TYPE_INT32) {
+    return parse_int32(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+  }
+
+  if (type_id == PG_THRIFT_TYPE_INT64) {
+    return parse_int64(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+  }
+
+  if (type_id == PG_THRIFT_TYPE_STRUCT) {
+    return parse_struct_bytea(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+  }
+
+  if (type_id == PG_THRIFT_TYPE_LIST || type_id == PG_THRIFT_TYPE_SET) {
+    return parse_list_bytea(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+  }
+
+  if (type_id == PG_THRIFT_TYPE_MAP) {
+    return parse_map_bytea(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+  }
+  elog(ERROR, "Unsupported thrift type");
 }
 
 // give start of data, end of data and type id,
 // return pointer after its end
 uint8* skip_field(uint8* start, uint8* end, int8 field_type) {
   uint8* ret = 0;
-  if (field_type == 2) {
-    ret = start + 1;
-  } else if (field_type == 3 || field_type == 11) {
-    int32 len = parse_int(start, end, 4);
-    ret = start + sizeof(int32) + len;
-  } else if (field_type == 4) {
-    ret = start + sizeof(float8);
-  } else if (field_type == 6) {
-    ret = start + sizeof(int16);
-  } else if (field_type == 8) {
-    ret = start + sizeof(int32);
-  } else if (field_type == 10) {
-    ret = start + sizeof(int64);
-  } else if (field_type == 12) {
-    ret = start + 3;
+  if (field_type == PG_THRIFT_TYPE_BOOL) {
+    ret = start + BOOL_LEN;
+  } else if (field_type == PG_THRIFT_TYPE_BYTE || field_type == PG_THRIFT_TYPE_STRING) {
+    int32 len = parse_int_helper(start, end, INT32_LEN);
+    ret = start + INT32_LEN + len;
+  } else if (field_type == PG_THRIFT_TYPE_DOUBLE) {
+    ret = start + DOUBLE_LEN;
+  } else if (field_type == PG_THRIFT_TYPE_INT16) {
+    ret = start + INT16_LEN;
+  } else if (field_type == PG_THRIFT_TYPE_INT32) {
+    ret = start + INT32_LEN;
+  } else if (field_type == PG_THRIFT_TYPE_INT64) {
+    ret = start + INT64_LEN;
+  } else if (field_type == PG_THRIFT_TYPE_STRUCT) {
+    ret = start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN;
     while (true) {
       if (*ret == 0) break;
       int8 field_type = *ret;
       ret = skip_field(ret, end, field_type);
     }
-  } else if (field_type == 13) {
+  } else if (field_type == PG_THRIFT_TYPE_MAP) {
     int8 key_type = *start;
-    int8 value_type = *(start + 1);
-    int32 len = parse_int(start + 2, end, 4);
-    ret = start + 6;
+    int8 value_type = *(start + PG_THRIFT_TYPE_LEN);
+    int32 len = parse_int_helper(start + 2*PG_THRIFT_TYPE_LEN, end, INT32_LEN);
+    ret = start + 2*PG_THRIFT_TYPE_LEN + INT32_LEN;
     for (int i = 0; i < len; i++) {
       ret = skip_field(ret, end, key_type);
       ret = skip_field(ret, end, value_type);
     }
-  } else if (field_type == 14 || field_type == 15) {
-    // set or list
-    int32 len = parse_int(start + 1, end, 4);
+  } else if (field_type == PG_THRIFT_TYPE_SET || field_type == PG_THRIFT_TYPE_LIST) {
+    int32 len = parse_int_helper(start + PG_THRIFT_TYPE_LEN, end, INT32_LEN);
     int8 field_type = *start;
-    ret = start + 5;
+    ret = start + PG_THRIFT_TYPE_LEN + INT32_LEN;
     for (int i = 0; i < len; i++) {
       ret = skip_field(ret, end, field_type);
     }
   }
 
   if (ret > end) {
-    elog(ERROR, invalid_thrift);
+    elog(ERROR, "Invalid thrift format");
   }
 
   return ret;
@@ -220,8 +260,8 @@ uint8* skip_field(uint8* start, uint8* end, int8 field_type) {
 Datum thrift_binary_decode(uint8* data, Size size, int16 field_id, int8 type_id) {
   uint8* start = data, *end = data + size;
   while (start < end) {
-    if (start + 2 >= end) break;
-    int16 parsed_field_id = parse_int(start + 1, end, 2);
+    if (start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN - 1 >= end) break;
+    int16 parsed_field_id = parse_int_helper(start + PG_THRIFT_TYPE_LEN, end, FIELD_LEN);
     if (parsed_field_id == field_id) {
       if (*start == type_id) {
         return parse_field(start, end, type_id);
@@ -229,11 +269,11 @@ Datum thrift_binary_decode(uint8* data, Size size, int16 field_id, int8 type_id)
       break;
     } else {
       int8 type_id = *start;
-      start = start + 3;
+      start = start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN;
       start = skip_field(start, end, type_id);
     }
   }
-  elog(ERROR, invalid_thrift);
+  elog(ERROR, "Invalid thrift format");
 }
 
 Datum thrift_binary_get_bool(PG_FUNCTION_ARGS) {

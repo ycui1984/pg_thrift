@@ -23,17 +23,22 @@ psql postgres
 make && make install
 ```
 
-## Step5. Confirm plugin has been installed
+## Step5. Run tests
+```
+make install && make installcheck
+```
+
+## Step6. Confirm plugin has been installed
 ```
 postgres=# select * from pg_available_extensions where name = 'pg_thrift';
 ```
 
-## Step6. Load pg_thrift extension
+## Step7. Load pg_thrift extension
 ```
 postgres=# create extension pg_thrift;
 ```
 
-## Step7. Confirm plugin has been loaded
+## Step8. Confirm plugin has been loaded
 ```
 postgres=# \dx
 ```

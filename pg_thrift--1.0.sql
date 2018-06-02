@@ -100,3 +100,21 @@ CREATE FUNCTION parse_map_bytea(bytea)
     RETURNS bytea[]
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
+
+CREATE TYPE thrift_binary;
+
+CREATE FUNCTION thrift_binary_in(cstring)
+    RETURNS thrift_binary
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION thrift_binary_out(thrift_binary)
+    RETURNS cstring
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C IMMUTABLE STRICT;
+
+CREATE TYPE thrift_binary (
+    INPUT = thrift_binary_in,
+    OUTPUT = thrift_binary_out,
+    LIKE = bytea
+);

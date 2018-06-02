@@ -29,6 +29,8 @@ PG_FUNCTION_INFO_V1(parse_int64);
 PG_FUNCTION_INFO_V1(parse_double);
 PG_FUNCTION_INFO_V1(parse_list_bytea);
 PG_FUNCTION_INFO_V1(parse_map_bytea);
+PG_FUNCTION_INFO_V1(thrift_binary_in);
+PG_FUNCTION_INFO_V1(thrift_binary_out);
 
 Datum thrift_binary_decode(uint8* data, Size size, int16 field_id, int8 type_id);
 Datum parse_field(uint8* start, uint8* end, int8 type_id);
@@ -46,6 +48,7 @@ Datum parse_double_internal(uint8* start, uint8* end);
 Datum parse_struct_bytea_internal(uint8* start, uint8* end);
 Datum parse_list_bytea_internal(uint8* start, uint8* end);
 Datum parse_map_bytea_internal(uint8* start, uint8* end);
+uint8* encode_bool(char* value);
 
 bool is_big_endian() {
   uint32 i = 1;
@@ -418,4 +421,29 @@ Datum thrift_binary_get_map_bytea(PG_FUNCTION_ARGS) {
   uint8* data = (uint8*)VARDATA(thrift_bytea);
   Size size = VARSIZE(thrift_bytea) - VARHDRSZ;
   return thrift_binary_decode(data, size, field_id, 13);
+}
+
+uint8* encode_bool(char* value) {
+  uint8* ret = palloc(BOOL_LEN);
+  if (0 == strcmp("0", value)) {
+    *ret = 0;
+  } else if (0 == strcmp("1", value)) {
+    *ret = 1;
+  } else {
+    elog(ERROR, "Invalid thrift format encoding bool");
+  }
+  return ret;
+}
+
+Datum thrift_binary_in(PG_FUNCTION_ARGS) {
+  char* input = PG_GETARG_CSTRING(0);
+  // testing bool encoding
+  bytea* ret = palloc(BOOL_LEN + VARHDRSZ);
+  uint8* data = encode_bool("1");
+  memcpy(VARDATA(ret), data, BOOL_LEN);
+  SET_VARSIZE(ret, BOOL_LEN + VARHDRSZ);
+  PG_RETURN_BYTEA_P(ret);
+}
+
+Datum thrift_binary_out(PG_FUNCTION_ARGS) {
 }

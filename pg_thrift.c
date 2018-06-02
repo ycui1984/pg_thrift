@@ -27,7 +27,6 @@ PG_FUNCTION_INFO_V1(parse_int16);
 PG_FUNCTION_INFO_V1(parse_int32);
 PG_FUNCTION_INFO_V1(parse_int64);
 PG_FUNCTION_INFO_V1(parse_double);
-PG_FUNCTION_INFO_V1(parse_struct_bytea);
 PG_FUNCTION_INFO_V1(parse_list_bytea);
 PG_FUNCTION_INFO_V1(parse_map_bytea);
 
@@ -148,11 +147,6 @@ Datum parse_int64(PG_FUNCTION_ARGS) {
 
 Datum parse_int64_internal(uint8* start, uint8* end) {
   PG_RETURN_INT64(parse_int_helper(start, end, INT64_LEN));
-}
-
-Datum parse_struct_bytea(PG_FUNCTION_ARGS) {
-  bytea* data = PG_GETARG_BYTEA_P(0);
-  return parse_struct_bytea_internal(VARDATA(data), VARDATA(data) + VARSIZE(data));
 }
 
 Datum parse_struct_bytea_internal(uint8* start, uint8* end) {

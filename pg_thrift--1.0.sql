@@ -91,11 +91,6 @@ CREATE FUNCTION parse_double(bytea)
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
-CREATE FUNCTION parse_struct_bytea(bytea)
-    RETURNS bytea
-    AS 'MODULE_PATHNAME'
-    LANGUAGE C STRICT IMMUTABLE;
-
 CREATE FUNCTION parse_list_bytea(bytea)
     RETURNS bytea[]
     AS 'MODULE_PATHNAME'

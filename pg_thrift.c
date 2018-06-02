@@ -4,6 +4,7 @@
 #include <utils/builtins.h>
 #include <utils/array.h>
 #include <utils/lsyscache.h>
+#include <utils/json.h>
 #include "pg_thrift.h"
 
 PG_MODULE_MAGIC;
@@ -20,6 +21,15 @@ PG_FUNCTION_INFO_V1(thrift_binary_get_list_bytea);
 PG_FUNCTION_INFO_V1(thrift_binary_get_set_bytea);
 PG_FUNCTION_INFO_V1(thrift_binary_get_map_bytea);
 PG_FUNCTION_INFO_V1(parse_boolean);
+PG_FUNCTION_INFO_V1(parse_string);
+PG_FUNCTION_INFO_V1(parse_bytes);
+PG_FUNCTION_INFO_V1(parse_int16);
+PG_FUNCTION_INFO_V1(parse_int32);
+PG_FUNCTION_INFO_V1(parse_int64);
+PG_FUNCTION_INFO_V1(parse_double);
+PG_FUNCTION_INFO_V1(parse_struct_bytea);
+PG_FUNCTION_INFO_V1(parse_list_bytea);
+PG_FUNCTION_INFO_V1(parse_map_bytea);
 
 Datum thrift_binary_decode(uint8* data, Size size, int16 field_id, int8 type_id);
 Datum parse_field(uint8* start, uint8* end, int8 type_id);
@@ -27,15 +37,16 @@ uint8* skip_field(uint8* start, uint8* end, int8 type_id);
 bool is_big_endian(void);
 int64 parse_int_helper(uint8* start, uint8* end, int len);
 void swap_bytes(char* bytes, int len);
-//Datum parse_boolean(uint8* start, uint8* end);
-Datum parse_bytes(uint8* start, uint8* end);
-Datum parse_int16(uint8* start, uint8* end);
-Datum parse_int32(uint8* start, uint8* end);
-Datum parse_int64(uint8* start, uint8* end);
-Datum parse_double(uint8* start, uint8* end);
-Datum parse_struct_bytea(uint8* start, uint8* end);
-Datum parse_list_bytea(uint8* start, uint8* end);
-Datum parse_map_bytea(uint8* start, uint8* end);
+Datum parse_boolean_internal(uint8* start, uint8* end);
+Datum parse_string_internal(uint8* start, uint8* end);
+Datum parse_bytes_internal(uint8* start, uint8* end);
+Datum parse_int16_internal(uint8* start, uint8* end);
+Datum parse_int32_internal(uint8* start, uint8* end);
+Datum parse_int64_internal(uint8* start, uint8* end);
+Datum parse_double_internal(uint8* start, uint8* end);
+Datum parse_struct_bytea_internal(uint8* start, uint8* end);
+Datum parse_list_bytea_internal(uint8* start, uint8* end);
+Datum parse_map_bytea_internal(uint8* start, uint8* end);
 
 bool is_big_endian() {
   uint32 i = 1;
@@ -63,15 +74,28 @@ int64 parse_int_helper(uint8* start, uint8* end, int len) {
 }
 
 Datum parse_boolean(PG_FUNCTION_ARGS) {
-  uint8* start = PG_GETARG_POINTER(0);
-  uint8* end = PG_GETARG_POINTER(1);
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  return parse_boolean_internal(VARDATA(data), VARDATA(data) + VARSIZE(data));
+}
+
+Datum parse_boolean_internal(uint8* start, uint8* end) {
   if (start >= end) {
     elog(ERROR, "Invalid thrift format for bool");
   }
   PG_RETURN_BOOL(*start);
 }
 
-Datum parse_bytes(uint8* start, uint8* end) {
+Datum parse_string(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  return parse_bytes_internal(VARDATA(data), VARDATA(data) + VARSIZE(data));
+}
+
+Datum parse_bytes(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  return parse_bytes_internal(VARDATA(data), VARDATA(data) + VARSIZE(data));
+}
+
+Datum parse_bytes_internal(uint8* start, uint8* end) {
   int32 len = parse_int_helper(start, end, BYTE_LEN);
   if (start + BYTE_LEN + len - 1 >= end) {
     elog(ERROR, "Invalid thrift format for bytes or string");
@@ -82,7 +106,12 @@ Datum parse_bytes(uint8* start, uint8* end) {
   PG_RETURN_POINTER(ret);
 }
 
-Datum parse_double(uint8* start, uint8* end) {
+Datum parse_double(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  return parse_double_internal(VARDATA(data), VARDATA(data) + VARSIZE(data));
+}
+
+Datum parse_double_internal(uint8* start, uint8* end) {
   if (start + DOUBLE_LEN - 1 >= end) {
     elog(ERROR, "Invalid thrift format for double");
   }
@@ -94,19 +123,39 @@ Datum parse_double(uint8* start, uint8* end) {
   PG_RETURN_FLOAT8(ret);
 }
 
-Datum parse_int16(uint8* start, uint8* end) {
+Datum parse_int16(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  return parse_int16_internal(VARDATA(data), VARDATA(data) + VARSIZE(data));
+}
+
+Datum parse_int16_internal(uint8* start, uint8* end) {
   PG_RETURN_INT16(parse_int_helper(start, end, INT16_LEN));
 }
 
-Datum parse_int32(uint8* start, uint8* end) {
+Datum parse_int32(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  return parse_int32_internal(VARDATA(data), VARDATA(data) + VARSIZE(data));
+}
+
+Datum parse_int32_internal(uint8* start, uint8* end) {
   PG_RETURN_INT32(parse_int_helper(start, end, INT32_LEN));
 }
 
-Datum parse_int64(uint8* start, uint8* end) {
+Datum parse_int64(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  return parse_int64_internal(VARDATA(data), VARDATA(data) + VARSIZE(data));
+}
+
+Datum parse_int64_internal(uint8* start, uint8* end) {
   PG_RETURN_INT64(parse_int_helper(start, end, INT64_LEN));
 }
 
-Datum parse_struct_bytea(uint8* start, uint8* end) {
+Datum parse_struct_bytea(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  return parse_struct_bytea_internal(VARDATA(data), VARDATA(data) + VARSIZE(data));
+}
+
+Datum parse_struct_bytea_internal(uint8* start, uint8* end) {
   uint8* next_start = skip_field(start, end, PG_THRIFT_TYPE_STRUCT);
   int32 len = next_start - start;
   bytea* ret = palloc(len + VARHDRSZ);
@@ -115,7 +164,12 @@ Datum parse_struct_bytea(uint8* start, uint8* end) {
   PG_RETURN_POINTER(ret);
 }
 
-Datum parse_list_bytea(uint8* start, uint8* end) {
+Datum parse_list_bytea(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  return parse_list_bytea_internal(VARDATA(data), VARDATA(data) + VARSIZE(data));
+}
+
+Datum parse_list_bytea_internal(uint8* start, uint8* end) {
   if (start + PG_THRIFT_TYPE_LEN + LIST_LEN - 1 >= end) {
     elog(ERROR, "Invalid thrift format for list");
   }
@@ -144,7 +198,12 @@ Datum parse_list_bytea(uint8* start, uint8* end) {
   );
 }
 
-Datum parse_map_bytea(uint8* start, uint8* end) {
+Datum parse_map_bytea(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  return parse_map_bytea_internal(VARDATA(data), VARDATA(data) + VARSIZE(data));
+}
+
+Datum parse_map_bytea_internal(uint8* start, uint8* end) {
   if (start + 2*PG_THRIFT_TYPE_LEN + INT32_LEN - 1 >= end) {
     elog(ERROR, "Invalid thrift format for map");
   }
@@ -174,40 +233,39 @@ Datum parse_map_bytea(uint8* start, uint8* end) {
 
 Datum parse_field(uint8* start, uint8* end, int8 type_id) {
   if (type_id == PG_THRIFT_TYPE_BOOL) {
-    return DirectFunctionCall1(
-      parse_boolean, PointerGetDatum(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN), PointerGetDatum(end));
+    return parse_boolean_internal(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
   }
 
   if (type_id == PG_THRIFT_TYPE_BYTE || type_id == PG_THRIFT_TYPE_STRING) {
-    return parse_bytes(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+    return parse_bytes_internal(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
   }
 
   if (type_id == PG_THRIFT_TYPE_DOUBLE) {
-    return parse_double(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+    return parse_double_internal(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
   }
 
   if (type_id == PG_THRIFT_TYPE_INT16) {
-    return parse_int16(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+    return parse_int16_internal(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
   }
 
   if (type_id == PG_THRIFT_TYPE_INT32) {
-    return parse_int32(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+    return parse_int32_internal(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
   }
 
   if (type_id == PG_THRIFT_TYPE_INT64) {
-    return parse_int64(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+    return parse_int64_internal(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
   }
 
   if (type_id == PG_THRIFT_TYPE_STRUCT) {
-    return parse_struct_bytea(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+    return parse_struct_bytea_internal(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
   }
 
   if (type_id == PG_THRIFT_TYPE_LIST || type_id == PG_THRIFT_TYPE_SET) {
-    return parse_list_bytea(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+    return parse_list_bytea_internal(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
   }
 
   if (type_id == PG_THRIFT_TYPE_MAP) {
-    return parse_map_bytea(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+    return parse_map_bytea_internal(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
   }
   elog(ERROR, "Unsupported thrift type");
 }

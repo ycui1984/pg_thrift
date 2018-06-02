@@ -49,6 +49,12 @@ Datum parse_struct_bytea_internal(uint8* start, uint8* end);
 Datum parse_list_bytea_internal(uint8* start, uint8* end);
 Datum parse_map_bytea_internal(uint8* start, uint8* end);
 uint8* encode_bool(char* value);
+uint8* encode_int16(char* value);
+uint8* encode_int32(char* value);
+uint8* encode_int64(char* value);
+Datum bytea_to_json(int type, uint8* start, uint8* end);
+char* parse_json_type(char* input);
+char* parse_json_value(char* input);
 
 bool is_big_endian() {
   uint32 i = 1;
@@ -424,26 +430,148 @@ Datum thrift_binary_get_map_bytea(PG_FUNCTION_ARGS) {
 }
 
 uint8* encode_bool(char* value) {
-  uint8* ret = palloc(BOOL_LEN);
+  uint8* ret = palloc(PG_THRIFT_TYPE_LEN + BOOL_LEN);
+  *ret = PG_THRIFT_TYPE_BOOL;
   if (0 == strcmp("0", value)) {
-    *ret = 0;
+    *(ret + 1) = 0;
   } else if (0 == strcmp("1", value)) {
-    *ret = 1;
+    *(ret + 1) = 1;
   } else {
     elog(ERROR, "Invalid thrift format encoding bool");
   }
   return ret;
 }
 
-Datum thrift_binary_in(PG_FUNCTION_ARGS) {
-  char* input = PG_GETARG_CSTRING(0);
-  // testing bool encoding
-  bytea* ret = palloc(BOOL_LEN + VARHDRSZ);
-  uint8* data = encode_bool("1");
-  memcpy(VARDATA(ret), data, BOOL_LEN);
-  SET_VARSIZE(ret, BOOL_LEN + VARHDRSZ);
-  PG_RETURN_BYTEA_P(ret);
+uint8* encode_int16(char* value) {
+  uint8* ret = palloc(PG_THRIFT_TYPE_LEN + INT16_LEN);
+  *ret = PG_THRIFT_TYPE_INT16;
+  int16 v = atoi(value);
+  memcpy(ret + 1, &v, INT16_LEN);
+  if (!is_big_endian()) {
+    swap_bytes((char*)(ret + 1), INT16_LEN);
+  }
+  return ret;
 }
 
+uint8* encode_int32(char* value) {
+  uint8* ret = palloc(PG_THRIFT_TYPE_LEN + INT32_LEN);
+  *ret = PG_THRIFT_TYPE_INT32;
+  int32 v = atoi(value);
+  memcpy(ret + 1, &v, INT32_LEN);
+  if (!is_big_endian()) {
+    swap_bytes((char*)(ret + 1), INT32_LEN);
+  }
+  return ret;
+}
+
+uint8* encode_int64(char* value) {
+  uint8* ret = palloc(PG_THRIFT_TYPE_LEN + INT64_LEN);
+  *ret = PG_THRIFT_TYPE_INT64;
+  int64 v = atol(value);
+  memcpy(ret + 1, &v, INT64_LEN);
+  if (!is_big_endian()) {
+    swap_bytes((char*)(ret + 1), INT64_LEN);
+  }
+  return ret;
+}
+
+//TODO: implement actual json parsing
+char* parse_json_type(char* input) {
+  return "int64";
+}
+
+//TODO: implement actual json parsing
+char* parse_json_value(char* input) {
+  return "50";
+}
+
+/*
+ * NOTE: format is first byte stores type, then comes data
+ * otherwise hard to recover by just using raw bytes
+ */
+Datum thrift_binary_in(PG_FUNCTION_ARGS) {
+  char* input = PG_GETARG_CSTRING(0);
+  char* type = parse_json_type(input);
+  char* value = parse_json_value(input);
+  if (0 == strcmp("bool", type)) {
+    bytea* ret = palloc(PG_THRIFT_TYPE_LEN + BOOL_LEN + VARHDRSZ);
+    uint8* data = encode_bool(value);
+    memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + BOOL_LEN);
+    SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + BOOL_LEN + VARHDRSZ);
+    PG_RETURN_BYTEA_P(ret);
+  }
+
+  if (0 == strcmp("int16", type)) {
+    bytea* ret = palloc(PG_THRIFT_TYPE_LEN + INT16_LEN + VARHDRSZ);
+    uint8* data = encode_int16(value);
+    memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + INT16_LEN);
+    SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + INT16_LEN + VARHDRSZ);
+    PG_RETURN_BYTEA_P(ret);
+  }
+
+  if (0 == strcmp("int32", type)) {
+    bytea* ret = palloc(PG_THRIFT_TYPE_LEN + INT32_LEN + VARHDRSZ);
+    uint8* data = encode_int32(value);
+    memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + INT32_LEN);
+    SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + INT32_LEN + VARHDRSZ);
+    PG_RETURN_BYTEA_P(ret);
+  }
+
+  if (0 == strcmp("int64", type)) {
+    bytea* ret = palloc(PG_THRIFT_TYPE_LEN + INT64_LEN + VARHDRSZ);
+    uint8* data = encode_int64(value);
+    memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + INT64_LEN);
+    SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + INT64_LEN + VARHDRSZ);
+    PG_RETURN_BYTEA_P(ret);
+  }
+
+  //TODO: implement other types;
+
+  elog(ERROR, "Unsupported thrift type");
+}
+
+Datum bytea_to_json(int type, uint8* start, uint8* end) {
+  char* typeStr = "";
+  if (type == PG_THRIFT_TYPE_BOOL) {
+    typeStr = "bool";
+    int64 value = BoolGetDatum(parse_boolean_internal(start, end));
+    char* retStr = palloc(MAX_JSON_STRING_SIZE);
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":%ld}", typeStr, value);
+    return CStringGetDatum(retStr);
+  }
+
+  if (type == PG_THRIFT_TYPE_INT16) {
+    typeStr = "int16";
+    int16 value = Int16GetDatum(parse_int16_internal(start, end));
+    char* retStr = palloc(MAX_JSON_STRING_SIZE);
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":%hd}", typeStr, value);
+    return CStringGetDatum(retStr);
+  }
+
+  if (type == PG_THRIFT_TYPE_INT32) {
+    typeStr = "int32";
+    int32 value = Int32GetDatum(parse_int32_internal(start, end));
+    char* retStr = palloc(MAX_JSON_STRING_SIZE);
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":%d}", typeStr, value);
+    return CStringGetDatum(retStr);
+  }
+
+  if (type == PG_THRIFT_TYPE_INT64) {
+    typeStr = "int64";
+    int64 value = Int64GetDatum(parse_int64_internal(start, end));
+    char* retStr = palloc(MAX_JSON_STRING_SIZE);
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":%ld}", typeStr, value);
+    return CStringGetDatum(retStr);
+  }
+
+  //TODO: implement other types
+}
+
+
 Datum thrift_binary_out(PG_FUNCTION_ARGS) {
+  bytea* thrift_bytes = PG_GETARG_BYTEA_P(0);
+  uint8* data = VARDATA(thrift_bytes);
+  int size = VARSIZE(thrift_bytes);
+  int type = *data;
+  return bytea_to_json(type, data + 1, data + size);
 }

@@ -29,5 +29,6 @@
 #define LIST_LEN 4
 #define BOOL_LEN 1
 #define FIELD_LEN 2
+#define MAX_JSON_STRING_SIZE 1024
 
 #endif // _PG_THRIFT_H_

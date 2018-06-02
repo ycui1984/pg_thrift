@@ -19,6 +19,7 @@ PG_FUNCTION_INFO_V1(thrift_binary_get_struct_bytea);
 PG_FUNCTION_INFO_V1(thrift_binary_get_list_bytea);
 PG_FUNCTION_INFO_V1(thrift_binary_get_set_bytea);
 PG_FUNCTION_INFO_V1(thrift_binary_get_map_bytea);
+PG_FUNCTION_INFO_V1(parse_boolean);
 
 Datum thrift_binary_decode(uint8* data, Size size, int16 field_id, int8 type_id);
 Datum parse_field(uint8* start, uint8* end, int8 type_id);
@@ -26,7 +27,7 @@ uint8* skip_field(uint8* start, uint8* end, int8 type_id);
 bool is_big_endian(void);
 int64 parse_int_helper(uint8* start, uint8* end, int len);
 void swap_bytes(char* bytes, int len);
-Datum parse_boolean(uint8* start, uint8* end);
+//Datum parse_boolean(uint8* start, uint8* end);
 Datum parse_bytes(uint8* start, uint8* end);
 Datum parse_int16(uint8* start, uint8* end);
 Datum parse_int32(uint8* start, uint8* end);
@@ -61,7 +62,9 @@ int64 parse_int_helper(uint8* start, uint8* end, int len) {
   return val;
 }
 
-Datum parse_boolean(uint8* start, uint8* end) {
+Datum parse_boolean(PG_FUNCTION_ARGS) {
+  uint8* start = PG_GETARG_POINTER(0);
+  uint8* end = PG_GETARG_POINTER(1);
   if (start >= end) {
     elog(ERROR, "Invalid thrift format for bool");
   }
@@ -171,7 +174,8 @@ Datum parse_map_bytea(uint8* start, uint8* end) {
 
 Datum parse_field(uint8* start, uint8* end, int8 type_id) {
   if (type_id == PG_THRIFT_TYPE_BOOL) {
-    return parse_boolean(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
+    return DirectFunctionCall1(
+      parse_boolean, PointerGetDatum(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN), PointerGetDatum(end));
   }
 
   if (type_id == PG_THRIFT_TYPE_BYTE || type_id == PG_THRIFT_TYPE_STRING) {

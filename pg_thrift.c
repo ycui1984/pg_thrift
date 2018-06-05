@@ -106,12 +106,23 @@ Datum parse_bytes(PG_FUNCTION_ARGS) {
 Datum parse_bytes_internal(uint8* start, uint8* end) {
   int32 len = parse_int_helper(start, end, BYTE_LEN);
   if (start + BYTE_LEN + len - 1 >= end) {
-    elog(ERROR, "Invalid thrift format for bytes or string");
+    elog(ERROR, "Invalid thrift format for bytes");
   }
   bytea* ret = palloc(len + VARHDRSZ);
   memcpy(VARDATA(ret), start + BYTE_LEN, len);
   SET_VARSIZE(ret, len + VARHDRSZ);
   PG_RETURN_POINTER(ret);
+}
+
+Datum parse_string_internal(uint8* start, uint8* end) {
+  int32 len = parse_int_helper(start, end, BYTE_LEN);
+  if (start + BYTE_LEN + len - 1 >= end) {
+    elog(ERROR, "Invalid thrift format for string");
+  }
+  char* ret = palloc(len + 1);
+  memset(ret, 0, len + 1);
+  memcpy(ret, start + BYTE_LEN, len);
+  PG_RETURN_CSTRING(ret);
 }
 
 Datum parse_double(PG_FUNCTION_ARGS) {
@@ -432,13 +443,8 @@ Datum thrift_binary_get_map_bytea(PG_FUNCTION_ARGS) {
 uint8* encode_bool(char* value) {
   uint8* ret = palloc(PG_THRIFT_TYPE_LEN + BOOL_LEN);
   *ret = PG_THRIFT_TYPE_BOOL;
-  if (0 == strcmp("0", value)) {
-    *(ret + 1) = 0;
-  } else if (0 == strcmp("1", value)) {
-    *(ret + 1) = 1;
-  } else {
-    elog(ERROR, "Invalid thrift format encoding bool");
-  }
+  bool v = atoi(value);
+  memcpy(ret + PG_THRIFT_TYPE_LEN, &v, BOOL_LEN);
   return ret;
 }
 
@@ -446,9 +452,9 @@ uint8* encode_int16(char* value) {
   uint8* ret = palloc(PG_THRIFT_TYPE_LEN + INT16_LEN);
   *ret = PG_THRIFT_TYPE_INT16;
   int16 v = atoi(value);
-  memcpy(ret + 1, &v, INT16_LEN);
+  memcpy(ret + PG_THRIFT_TYPE_LEN, &v, INT16_LEN);
   if (!is_big_endian()) {
-    swap_bytes((char*)(ret + 1), INT16_LEN);
+    swap_bytes((char*)(ret + PG_THRIFT_TYPE_LEN), INT16_LEN);
   }
   return ret;
 }
@@ -457,9 +463,9 @@ uint8* encode_int32(char* value) {
   uint8* ret = palloc(PG_THRIFT_TYPE_LEN + INT32_LEN);
   *ret = PG_THRIFT_TYPE_INT32;
   int32 v = atoi(value);
-  memcpy(ret + 1, &v, INT32_LEN);
+  memcpy(ret + PG_THRIFT_TYPE_LEN, &v, INT32_LEN);
   if (!is_big_endian()) {
-    swap_bytes((char*)(ret + 1), INT32_LEN);
+    swap_bytes((char*)(ret + PG_THRIFT_TYPE_LEN), INT32_LEN);
   }
   return ret;
 }
@@ -468,21 +474,33 @@ uint8* encode_int64(char* value) {
   uint8* ret = palloc(PG_THRIFT_TYPE_LEN + INT64_LEN);
   *ret = PG_THRIFT_TYPE_INT64;
   int64 v = atol(value);
-  memcpy(ret + 1, &v, INT64_LEN);
+  memcpy(ret + PG_THRIFT_TYPE_LEN, &v, INT64_LEN);
   if (!is_big_endian()) {
-    swap_bytes((char*)(ret + 1), INT64_LEN);
+    swap_bytes((char*)(ret + PG_THRIFT_TYPE_LEN), INT64_LEN);
   }
+  return ret;
+}
+
+uint8* encode_string(char* value) {
+  uint8* ret = palloc(PG_THRIFT_TYPE_LEN + BYTE_LEN + strlen(value));
+  *ret = PG_THRIFT_TYPE_STRING;
+  int32 len = strlen(value);
+  memcpy(ret + PG_THRIFT_TYPE_LEN, &len, INT32_LEN);
+  if (!is_big_endian()) {
+    swap_bytes((char*)(ret + PG_THRIFT_TYPE_LEN), INT32_LEN);
+  }
+  memcpy(ret + PG_THRIFT_TYPE_LEN + BYTE_LEN, value, strlen(value));
   return ret;
 }
 
 //TODO: implement actual json parsing
 char* parse_json_type(char* input) {
-  return "int64";
+  return "string";
 }
 
 //TODO: implement actual json parsing
 char* parse_json_value(char* input) {
-  return "50";
+  return "你好世界";
 }
 
 /*
@@ -525,6 +543,14 @@ Datum thrift_binary_in(PG_FUNCTION_ARGS) {
     PG_RETURN_BYTEA_P(ret);
   }
 
+  if (0 == strcmp("string", type)) {
+    bytea* ret = palloc(PG_THRIFT_TYPE_LEN + BYTE_LEN + strlen(value) + VARHDRSZ);
+    uint8* data = encode_string(value);
+    memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + BYTE_LEN + strlen(value));
+    SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + BYTE_LEN + strlen(value) + VARHDRSZ);
+    PG_RETURN_BYTEA_P(ret);
+  }
+
   //TODO: implement other types;
 
   elog(ERROR, "Unsupported thrift type");
@@ -564,6 +590,13 @@ Datum bytea_to_json(int type, uint8* start, uint8* end) {
     return CStringGetDatum(retStr);
   }
 
+  if (type == PG_THRIFT_TYPE_STRING) {
+    typeStr = "string";
+    char* value = parse_string_internal(start, end);
+    char* retStr = palloc(MAX_JSON_STRING_SIZE);
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
+    return CStringGetDatum(retStr);
+  }
   //TODO: implement other types
 }
 
@@ -573,5 +606,5 @@ Datum thrift_binary_out(PG_FUNCTION_ARGS) {
   uint8* data = VARDATA(thrift_bytes);
   int size = VARSIZE(thrift_bytes);
   int type = *data;
-  return bytea_to_json(type, data + 1, data + size);
+  return bytea_to_json(type, data + PG_THRIFT_TYPE_LEN, data + size);
 }

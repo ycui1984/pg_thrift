@@ -52,6 +52,8 @@ uint8* encode_bool(char* value);
 uint8* encode_int16(char* value);
 uint8* encode_int32(char* value);
 uint8* encode_int64(char* value);
+uint8* encode_double(char* value);
+uint8* encode_string(char* value);
 Datum bytea_to_json(int type, uint8* start, uint8* end);
 char* parse_json_type(char* input);
 char* parse_json_value(char* input);
@@ -481,6 +483,17 @@ uint8* encode_int64(char* value) {
   return ret;
 }
 
+uint8* encode_double(char* value) {
+  uint8* ret = palloc(PG_THRIFT_TYPE_LEN + DOUBLE_LEN);
+  *ret = PG_THRIFT_TYPE_DOUBLE;
+  float8 v = atof(value);
+  memcpy(ret + PG_THRIFT_TYPE_LEN, &v, DOUBLE_LEN);
+  if (!is_big_endian()) {
+    swap_bytes((char*)(ret + PG_THRIFT_TYPE_LEN), DOUBLE_LEN);
+  }
+  return ret;
+}
+
 uint8* encode_string(char* value) {
   uint8* ret = palloc(PG_THRIFT_TYPE_LEN + BYTE_LEN + strlen(value));
   *ret = PG_THRIFT_TYPE_STRING;
@@ -495,12 +508,12 @@ uint8* encode_string(char* value) {
 
 //TODO: implement actual json parsing
 char* parse_json_type(char* input) {
-  return "string";
+  return "double";
 }
 
 //TODO: implement actual json parsing
 char* parse_json_value(char* input) {
-  return "你好世界";
+  return "1234567890.1234567890";
 }
 
 /*
@@ -543,6 +556,14 @@ Datum thrift_binary_in(PG_FUNCTION_ARGS) {
     PG_RETURN_BYTEA_P(ret);
   }
 
+  if (0 == strcmp("double", type)) {
+    bytea* ret = palloc(PG_THRIFT_TYPE_LEN + DOUBLE_LEN + VARHDRSZ);
+    uint8* data = encode_double(value);
+    memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + DOUBLE_LEN);
+    SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + DOUBLE_LEN + VARHDRSZ);
+    PG_RETURN_BYTEA_P(ret);
+  }
+
   if (0 == strcmp("string", type)) {
     bytea* ret = palloc(PG_THRIFT_TYPE_LEN + BYTE_LEN + strlen(value) + VARHDRSZ);
     uint8* data = encode_string(value);
@@ -560,7 +581,7 @@ Datum bytea_to_json(int type, uint8* start, uint8* end) {
   char* typeStr = "";
   if (type == PG_THRIFT_TYPE_BOOL) {
     typeStr = "bool";
-    int64 value = BoolGetDatum(parse_boolean_internal(start, end));
+    int64 value = DatumGetBool(parse_boolean_internal(start, end));
     char* retStr = palloc(MAX_JSON_STRING_SIZE);
     sprintf(retStr, "{\"type\":\"%s\",\"value\":%ld}", typeStr, value);
     return CStringGetDatum(retStr);
@@ -568,7 +589,7 @@ Datum bytea_to_json(int type, uint8* start, uint8* end) {
 
   if (type == PG_THRIFT_TYPE_INT16) {
     typeStr = "int16";
-    int16 value = Int16GetDatum(parse_int16_internal(start, end));
+    int16 value = DatumGetInt16(parse_int16_internal(start, end));
     char* retStr = palloc(MAX_JSON_STRING_SIZE);
     sprintf(retStr, "{\"type\":\"%s\",\"value\":%hd}", typeStr, value);
     return CStringGetDatum(retStr);
@@ -576,7 +597,7 @@ Datum bytea_to_json(int type, uint8* start, uint8* end) {
 
   if (type == PG_THRIFT_TYPE_INT32) {
     typeStr = "int32";
-    int32 value = Int32GetDatum(parse_int32_internal(start, end));
+    int32 value = DatumGetInt32(parse_int32_internal(start, end));
     char* retStr = palloc(MAX_JSON_STRING_SIZE);
     sprintf(retStr, "{\"type\":\"%s\",\"value\":%d}", typeStr, value);
     return CStringGetDatum(retStr);
@@ -584,9 +605,17 @@ Datum bytea_to_json(int type, uint8* start, uint8* end) {
 
   if (type == PG_THRIFT_TYPE_INT64) {
     typeStr = "int64";
-    int64 value = Int64GetDatum(parse_int64_internal(start, end));
+    int64 value = DatumGetInt64(parse_int64_internal(start, end));
     char* retStr = palloc(MAX_JSON_STRING_SIZE);
     sprintf(retStr, "{\"type\":\"%s\",\"value\":%ld}", typeStr, value);
+    return CStringGetDatum(retStr);
+  }
+
+  if (type == PG_THRIFT_TYPE_DOUBLE) {
+    typeStr = "double";
+    float8 value = DatumGetFloat8(parse_double_internal(start, end));
+    char* retStr = palloc(MAX_JSON_STRING_SIZE);
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":%f}", typeStr, value);
     return CStringGetDatum(retStr);
   }
 

@@ -54,9 +54,13 @@ uint8* encode_int32(char* value);
 uint8* encode_int64(char* value);
 uint8* encode_double(char* value);
 uint8* encode_string(char* value);
+uint8* encode_byte(char* value);
 Datum bytea_to_json(int type, uint8* start, uint8* end);
 char* parse_json_type(char* input);
 char* parse_json_value(char* input);
+uint8 char_to_int8(char c);
+uint8* string_to_bytes(char* value);
+char int8_to_char(uint8 value, bool first_half);
 
 bool is_big_endian() {
   uint32 i = 1;
@@ -506,14 +510,63 @@ uint8* encode_string(char* value) {
   return ret;
 }
 
+uint8 char_to_int8(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  elog(ERROR, "Unable to parse invalid char");
+}
+
+char int8_to_char(uint8 value, bool first_half) {
+  uint8 half;
+  if (first_half) {
+    half = (value & 0xF0) >> 4;
+  } else {
+    half = value & 0x0F;
+  }
+  if (half >= 0 && half <= 9) return '0' + half;
+  if (half >= 10 && half <= 15) return 'A' + half - 10;
+}
+
+uint8* string_to_bytes(char* value) {
+  int32 bytes = strlen(value) / 2;
+  uint8* ret = palloc(bytes);
+  for (int i = 0; i < bytes; i++) {
+    ret[i] = (char_to_int8(value[2*i]) << 4) + char_to_int8(value[2*i + 1]);
+  }
+  return ret;
+}
+
+char* bytes_to_string(uint8* start, int32 len) {
+  char* ret = palloc(2*len + 1);
+  memset(ret, 0, 2*len + 1);
+  for (int i = 0; i < 2*len; i++) {
+    ret[i] = int8_to_char(*(start + i/2), i % 2 == 0);
+  }
+  return ret;
+}
+
+uint8* encode_byte(char* value) {
+  int32 bytes = strlen(value) / 2;
+  uint8* ret = palloc(PG_THRIFT_TYPE_LEN + BYTE_LEN + bytes);
+  *ret = PG_THRIFT_TYPE_BYTE;
+  memcpy(ret + PG_THRIFT_TYPE_LEN, &bytes, INT32_LEN);
+  if (!is_big_endian()) {
+    swap_bytes((char*)(ret + PG_THRIFT_TYPE_LEN), INT32_LEN);
+  }
+  uint8* data = string_to_bytes(value);
+  memcpy(ret + PG_THRIFT_TYPE_LEN + BYTE_LEN, data, bytes);
+  return ret;
+}
+
 //TODO: implement actual json parsing
 char* parse_json_type(char* input) {
-  return "double";
+  return "byte";
 }
 
 //TODO: implement actual json parsing
 char* parse_json_value(char* input) {
-  return "1234567890.1234567890";
+  return "ABCD";
 }
 
 /*
@@ -572,7 +625,18 @@ Datum thrift_binary_in(PG_FUNCTION_ARGS) {
     PG_RETURN_BYTEA_P(ret);
   }
 
-  //TODO: implement other types;
+  if (0 == strcmp("byte", type)) {
+    if (strlen(value) % 2 != 0) {
+      elog(ERROR, "Invalid byte format");
+    }
+    int32 bytes = strlen(value) / 2;
+    bytea* ret = palloc(PG_THRIFT_TYPE_LEN + BYTE_LEN + bytes + VARHDRSZ);
+    uint8* data = encode_byte(value);
+    memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + BYTE_LEN + bytes);
+    SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + BYTE_LEN + bytes + VARHDRSZ);
+    PG_RETURN_BYTEA_P(ret);
+  }
+  //TODO: implement list/set, map, struct;
 
   elog(ERROR, "Unsupported thrift type");
 }
@@ -622,6 +686,17 @@ Datum bytea_to_json(int type, uint8* start, uint8* end) {
   if (type == PG_THRIFT_TYPE_STRING) {
     typeStr = "string";
     char* value = parse_string_internal(start, end);
+    char* retStr = palloc(MAX_JSON_STRING_SIZE);
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
+    return CStringGetDatum(retStr);
+  }
+
+  if (type == PG_THRIFT_TYPE_BYTE) {
+    typeStr = "byte";
+    uint8* byte = DatumGetPointer(parse_bytes_internal(start, end));
+    uint8* data = VARDATA(byte);
+    uint8 size = VARSIZE(byte);
+    char* value = bytes_to_string(data, size - BYTE_LEN);
     char* retStr = palloc(MAX_JSON_STRING_SIZE);
     sprintf(retStr, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
     return CStringGetDatum(retStr);

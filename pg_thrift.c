@@ -525,7 +525,7 @@ char int8_to_char(uint8 value, bool first_half) {
     half = value & 0x0F;
   }
   if (half >= 0 && half <= 9) return '0' + half;
-  if (half >= 10 && half <= 15) return 'A' + half - 10;
+  return 'A' + half - 10;
 }
 
 uint8* string_to_bytes(char* value) {

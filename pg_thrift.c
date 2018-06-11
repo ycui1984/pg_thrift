@@ -48,6 +48,7 @@ Datum parse_double_internal(uint8* start, uint8* end);
 Datum parse_struct_bytea_internal(uint8* start, uint8* end);
 Datum parse_list_bytea_internal(uint8* start, uint8* end);
 Datum parse_map_bytea_internal(uint8* start, uint8* end);
+uint8* encode_json_to_byte(char* input, int32* plen);
 uint8* encode_bool(char* value);
 uint8* encode_int16(char* value);
 uint8* encode_int32(char* value);
@@ -569,76 +570,63 @@ char* parse_json_value(char* input) {
   return "ABCD";
 }
 
-/*
- * NOTE: format is first byte stores type, then comes data
- * otherwise hard to recover by just using raw bytes
- */
-Datum thrift_binary_in(PG_FUNCTION_ARGS) {
-  char* input = PG_GETARG_CSTRING(0);
+uint8* encode_json_to_byte(char* input, int32* plen) {
   char* type = parse_json_type(input);
   char* value = parse_json_value(input);
   if (0 == strcmp("bool", type)) {
-    bytea* ret = palloc(PG_THRIFT_TYPE_LEN + BOOL_LEN + VARHDRSZ);
-    uint8* data = encode_bool(value);
-    memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + BOOL_LEN);
-    SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + BOOL_LEN + VARHDRSZ);
-    PG_RETURN_BYTEA_P(ret);
+    *plen = BOOL_LEN;
+    return encode_bool(value);
   }
 
   if (0 == strcmp("int16", type)) {
-    bytea* ret = palloc(PG_THRIFT_TYPE_LEN + INT16_LEN + VARHDRSZ);
-    uint8* data = encode_int16(value);
-    memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + INT16_LEN);
-    SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + INT16_LEN + VARHDRSZ);
-    PG_RETURN_BYTEA_P(ret);
+    *plen = INT16_LEN;
+    return encode_int16(value);
   }
 
   if (0 == strcmp("int32", type)) {
-    bytea* ret = palloc(PG_THRIFT_TYPE_LEN + INT32_LEN + VARHDRSZ);
-    uint8* data = encode_int32(value);
-    memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + INT32_LEN);
-    SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + INT32_LEN + VARHDRSZ);
-    PG_RETURN_BYTEA_P(ret);
+    *plen = INT32_LEN;
+    return encode_int32(value);
   }
 
   if (0 == strcmp("int64", type)) {
-    bytea* ret = palloc(PG_THRIFT_TYPE_LEN + INT64_LEN + VARHDRSZ);
-    uint8* data = encode_int64(value);
-    memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + INT64_LEN);
-    SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + INT64_LEN + VARHDRSZ);
-    PG_RETURN_BYTEA_P(ret);
+    *plen = INT64_LEN;
+    return encode_int64(value);
   }
 
   if (0 == strcmp("double", type)) {
-    bytea* ret = palloc(PG_THRIFT_TYPE_LEN + DOUBLE_LEN + VARHDRSZ);
-    uint8* data = encode_double(value);
-    memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + DOUBLE_LEN);
-    SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + DOUBLE_LEN + VARHDRSZ);
-    PG_RETURN_BYTEA_P(ret);
+    *plen = DOUBLE_LEN;
+    return encode_double(value);
   }
 
   if (0 == strcmp("string", type)) {
-    bytea* ret = palloc(PG_THRIFT_TYPE_LEN + BYTE_LEN + strlen(value) + VARHDRSZ);
-    uint8* data = encode_string(value);
-    memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + BYTE_LEN + strlen(value));
-    SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + BYTE_LEN + strlen(value) + VARHDRSZ);
-    PG_RETURN_BYTEA_P(ret);
+    *plen = BYTE_LEN + strlen(value);
+    return encode_string(value);
   }
 
   if (0 == strcmp("byte", type)) {
     if (strlen(value) % 2 != 0) {
       elog(ERROR, "Invalid byte format");
     }
-    int32 bytes = strlen(value) / 2;
-    bytea* ret = palloc(PG_THRIFT_TYPE_LEN + BYTE_LEN + bytes + VARHDRSZ);
-    uint8* data = encode_byte(value);
-    memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + BYTE_LEN + bytes);
-    SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + BYTE_LEN + bytes + VARHDRSZ);
-    PG_RETURN_BYTEA_P(ret);
+    *plen = BYTE_LEN + strlen(value) / 2;
+    return encode_byte(value);
   }
-  //TODO: implement list/set, map, struct;
 
+  //TODO: implement list/set, map, struct;
   elog(ERROR, "Unsupported thrift type");
+}
+
+/*
+ * NOTE: format is first byte stores type, then comes data
+ * otherwise hard to recover by just using raw bytes
+ */
+Datum thrift_binary_in(PG_FUNCTION_ARGS) {
+  char* input = PG_GETARG_CSTRING(0);
+  int32 len = 0;
+  uint8* data = encode_json_to_byte(input, &len);
+  bytea* ret = palloc(PG_THRIFT_TYPE_LEN + len + VARHDRSZ);
+  memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + len);
+  SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + len + VARHDRSZ);
+  PG_RETURN_BYTEA_P(ret);
 }
 
 Datum bytea_to_json(int type, uint8* start, uint8* end) {

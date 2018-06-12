@@ -611,7 +611,82 @@ uint8* encode_json_to_byte(char* input, int32* plen) {
     return encode_byte(value);
   }
 
-  //TODO: implement list/set, map, struct;
+  if (0 == strcmp("list", type) || 0 == strcmp("set", type)) {
+    int32 len = 0;
+    char*[] list = parse_list(value, &len);
+    if (len == 0) {
+      elog(ERROR, "array length is 0");
+    }
+    int32 size = 2*PG_THRIFT_TYPE_LEN + INT32_LEN;
+    uint8* ret = palloc(size);
+    *ret = PG_THRIFT_TYPE_LIST;
+    memcpy(ret + 2*PG_THRIFT_TYPE_LEN, &len, INT32_LEN);
+    if (!is_big_endian()) {
+      swap_bytes((char*)(ret + 2*PG_THRIFT_TYPE_LEN), INT32_LEN);
+    }
+    for (int i = 0; i < len; i++) {
+      int32 element_len = 0;
+      uint8* element = encode_json_to_byte(list[i], &element_len);
+      repalloc(ret, size + element_len);
+      memcpy(ret + size, element + PG_THRIFT_TYPE_LEN, element_len);
+      size += element_len;
+      if (i == 0) {
+        ret[i + PG_THRIFT_TYPE_LEN] = element[0];
+      }
+    }
+    return ret;
+  }
+
+  if (0 == strcmp("map", type)) {
+    int32 len = 0;
+    char*[] list = parse_list(value, &len);
+    if (len == 0 || len % 2 == 1) {
+      elog(ERROR, "Invalid map element count");
+    }
+    int32 size = 3*PG_THRIFT_TYPE_LEN + INT32_LEN;
+    uint8* ret = palloc(size);
+    *ret = PG_THRIFT_TYPE_MAP;
+    memcpy(ret + 3*PG_THRIFT_TYPE_LEN, &len, INT32_LEN);
+    if (!is_big_endian()) {
+      swap_bytes((char*)(ret + 3*PG_THRIFT_TYPE_LEN), INT32_LEN);
+    }
+    for (int i = 0; i < len; i++) {
+      int32 element_len = 0;
+      uint8* element = encode_json_to_byte(list[i], &element_len);
+      repalloc(ret, size + element_len);
+      memcpy(ret + size, element + PG_THRIFT_TYPE_LEN, element_len);
+      size += element_len;
+      if (i == 0 || i == 1) {
+        ret[i + PG_THRIFT_TYPE_LEN] = element[0];
+      }
+    }
+    return ret;
+  }
+
+  if (0 == strcmp("struct", type)) {
+    int32 len = 0, size = PG_THRIFT_TYPE_LEN;
+    char*[] list = parse_map(value, &len);
+    uint8* ret = palloc(size + 1);
+    *ret = PG_THRIFT_TYPE_STRUCT;
+    for (int i = 0; i < len; i++) {
+      int16 field_id = -1;
+      uint8* field_json = parse_map_element(list[i], &field_id);
+      int32 field_len = 0;
+      uint8* encoded_field = encode_json_to_byte(field_json, &field_len);
+      uint8* field_buf = palloc(PG_THRIFT_TYPE_LEN + FIELD_LEN + field_len);
+      *field_buf = *encode_field;
+      memcpy(field_buf + PG_THRIFT_TYPE_LEN, &field_id, FIELD_LEN);
+      if (!is_big_endian()) {
+        swap_bytes((char*)(field_buf + PG_THRIFT_TYPE_LEN), FIELD_LEN);
+      }
+      memcpy(field_buf + PG_THRIFT_TYPE_LEN + FIELD_LEN, encoded_field + PG_THRIFT_TYPE_LEN, field_len);
+      repalloc(ret, size + PG_THRIFT_TYPE_LEN + FIELD_LEN + field_len);
+      memcpy(ret + size, field_buf, PG_THRIFT_TYPE_LEN + FIELD_LEN + field_len);
+      size += PG_THRIFT_TYPE_LEN + FIELD_LEN + field_len;
+    }
+    *ret[size] = 0;
+    return ret;
+  }
   elog(ERROR, "Unsupported thrift type");
 }
 

@@ -43,16 +43,14 @@ postgres=# create extension pg_thrift;
 postgres=# \dx
 ```
 
-## Usage Example (Creating Index Based on Thrift Bytes):
+
+## Creating Index Based on Thrift Bytes:
 
 ```
 create extension pg_thrift;
 
 create table thrift_index (x bytea);
--- put random data in the following schema
--- struct {
---  1: string   
---}
+-- put random data in the schema struct { 1: string }
 insert into thrift_index
 select E'\\x0b00010000000c' || convert_to(substring(md5('' || random() || random()), 0, 14), 'utf-8') || E'\\x00' from generate_series(1,10000);
 

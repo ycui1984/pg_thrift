@@ -1,10 +1,7 @@
 language: c
-sudo: true
 os:
-  - linux
-compiler:
-  - gcc
-install:
-  - sudo apt-get install postgresql postgresql-contrib
+  - osx
+before_install:
+  - brew install postgresql@9.4.1
 script:
   - make install && make installcheck

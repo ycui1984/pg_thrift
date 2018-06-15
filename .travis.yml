@@ -6,3 +6,5 @@ before_install:
   - brew services start postgresql@9.5
 script:
   - make install && make installcheck
+after_install:
+  - cat /Users/travis/build/charles-cui/pg_thrift/regression.out

@@ -2,7 +2,7 @@ language: c
 os:
   - osx
 before_install:
-  - brew install postgresql@9.6
-  - postgres -D /usr/local/var/postgres
+  - brew install postgresql@9.5
+  - brew services start postgresql@9.5
 script:
   - make install && make installcheck

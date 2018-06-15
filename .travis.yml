@@ -1,9 +1,8 @@
 language: c
-os:
-  - osx
+os: osx
+osx_image: xcode6.4
 before_install:
-  - brew install postgresql@9.5
-  - brew services start postgresql@9.5
+  - brew install postgresql@9.4
+  - brew services start postgresql@9.4
 script:
-  - make install && make installcheck
-  - cat /Users/travis/build/charles-cui/pg_thrift/regression.out
+  - make install && make installcheck && cat /Users/travis/build/charles-cui/pg_thrift/regression.out

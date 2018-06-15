@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/charles-cui/pg_thrift.svg?branch=master)](https://travis-ci.org/charles-cui/pg_thrift)
+
 # pg\_thrift
 
 Thrift support for PostgreSQL.

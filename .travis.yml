@@ -3,5 +3,6 @@ os:
   - osx
 before_install:
   - brew install postgresql@9.4
+  - postgres -D /usr/local/var/postgres
 script:
   - make install && make installcheck

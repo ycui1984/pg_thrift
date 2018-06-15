@@ -1,7 +1,10 @@
 language: c
+sudo: true
 os:
   - linux
 compiler:
   - gcc
+install:
+  - sudo apt-get install postgresql postgresql-contrib
 script:
   - make install && make installcheck

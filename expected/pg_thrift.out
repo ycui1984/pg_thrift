@@ -42,3 +42,6 @@ SELECT parse_string(UNNEST(thrift_binary_get_list_bytea(E'\\x0800010000007b0f000
  abcdef
 (2 rows)
 
+--TODO: add testing for thrift type
+--SELECT thrift_binary_in('{"type" : "byte", "value" : ABCD}');
+DROP EXTENSION pg_thrift;

@@ -35,9 +35,9 @@ SELECT thrift_binary_get_list_bytea(E'\\x0800010000007b0f00020b00000002000000063
  {"\\x00000006313233343536","\\x00000006616263646566"}
 (1 row)
 
-SELECT parse_string(UNNEST(thrift_binary_get_list_bytea(E'\\x0800010000007b0f00020b00000002000000063132333435360000000661626364656600' :: bytea, 2)));
- parse_string 
---------------
+SELECT parse_thrift_binary_string(UNNEST(thrift_binary_get_list_bytea(E'\\x0800010000007b0f00020b00000002000000063132333435360000000661626364656600' :: bytea, 2)));
+ parse_thrift_binary_string 
+----------------------------
  123456
  abcdef
 (2 rows)

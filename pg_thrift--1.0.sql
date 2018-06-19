@@ -56,47 +56,47 @@ CREATE FUNCTION thrift_binary_get_map_bytea(bytea, int)
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
-CREATE FUNCTION parse_boolean(bytea)
+CREATE FUNCTION parse_thrift_binary_boolean(bytea)
     RETURNS boolean
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
-CREATE FUNCTION parse_string(bytea)
+CREATE FUNCTION parse_thrift_binary_string(bytea)
     RETURNS text
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
-CREATE FUNCTION parse_bytes(bytea)
+CREATE FUNCTION parse_thrift_binary_bytes(bytea)
     RETURNS bytea
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
-CREATE FUNCTION parse_int16(bytea)
+CREATE FUNCTION parse_thrift_binary_int16(bytea)
     RETURNS int
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
-CREATE FUNCTION parse_int32(bytea)
+CREATE FUNCTION parse_thrift_binary_int32(bytea)
     RETURNS int
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
-CREATE FUNCTION parse_int64(bytea)
+CREATE FUNCTION parse_thrift_binary_int64(bytea)
     RETURNS bigint
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
-CREATE FUNCTION parse_double(bytea)
+CREATE FUNCTION parse_thrift_binary_double(bytea)
     RETURNS double precision
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
-CREATE FUNCTION parse_list_bytea(bytea)
+CREATE FUNCTION parse_thrift_binary_list_bytea(bytea)
     RETURNS bytea[]
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
-CREATE FUNCTION parse_map_bytea(bytea)
+CREATE FUNCTION parse_thrift_binary_map_bytea(bytea)
     RETURNS bytea[]
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;

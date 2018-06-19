@@ -77,7 +77,7 @@ char* parse_json_type(char* input);
 char* parse_json_value(char* input);
 uint8 char_to_int8(char c);
 uint8* string_to_bytes(char* value);
-char int8_to_char(uint8 value, bool first_half);
+char convert_int8_to_char(uint8 value, bool first_half);
 char* bytes_to_string(uint8* start, int32 len);
 
 bool is_big_endian() {
@@ -627,7 +627,7 @@ uint8 char_to_int8(char c) {
   elog(ERROR, "Unable to parse invalid char");
 }
 
-char int8_to_char(uint8 value, bool first_half) {
+char convert_int8_to_char(uint8 value, bool first_half) {
   uint8 half;
   if (first_half) {
     half = (value & 0xF0) >> 4;
@@ -651,7 +651,7 @@ char* bytes_to_string(uint8* start, int32 len) {
   char* ret = palloc(2*len + 1);
   memset(ret, 0, 2*len + 1);
   for (int i = 0; i < 2*len; i++) {
-    ret[i] = int8_to_char(*(start + i/2), i % 2 == 0);
+    ret[i] = convert_int8_to_char(*(start + i/2), i % 2 == 0);
   }
   return ret;
 }

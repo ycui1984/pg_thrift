@@ -314,8 +314,6 @@ Datum parse_compact_field(uint8* start, uint8* end, int8 type_id) {
   elog(ERROR, "Not implemented");
 }
 
-
-
 // give start of data, end of data and type id,
 // return pointer after its end
 uint8* skip_binary_field(uint8* start, uint8* end, int8 field_type) {

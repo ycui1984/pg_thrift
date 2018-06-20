@@ -418,9 +418,6 @@ Datum thrift_compact_decode(uint8* data, Size size, int16 field_id, int8 type_id
     } else {
       current_field_id = parse_int_helper(start + PG_THRIFT_TYPE_LEN, end, FIELD_LEN);
     }
-    // char buf[50];
-    // sprintf(buf, "field_id=%d, parsed_type_id=%d", current_field_id, parsed_type_id);
-    // elog(ERROR, buf);
     if (current_field_id == field_id) {
       if (parsed_type_id == type_id || (type_id == PG_THRIFT_COMPACT_BOOL && parsed_type_id <= type_id)) {
         return parse_compact_field(start, end, type_id);

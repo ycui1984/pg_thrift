@@ -47,12 +47,11 @@ PG_FUNCTION_INFO_V1(thrift_binary_out);
 
 Datum thrift_binary_decode(uint8* data, Size size, int16 field_id, int8 type_id);
 Datum thrift_compact_decode(uint8* data, Size size, int16 field_id, int8 type_id);
+Datum parse_binary_field(uint8* start, uint8* end, int8 type_id);
+Datum parse_compact_field(uint8* start, uint8* end, int8 type_id);
+uint8* skip_binary_field(uint8* start, uint8* end, int8 type_id);
+uint8* skip_compact_field(uint8* start, uint8* end, int8 type_id);
 
-Datum parse_field(uint8* start, uint8* end, int8 type_id);
-uint8* skip_field(uint8* start, uint8* end, int8 type_id);
-bool is_big_endian(void);
-int64 parse_int_helper(uint8* start, uint8* end, int len);
-void swap_bytes(char* bytes, int len);
 Datum parse_thrift_binary_boolean_internal(uint8* start, uint8* end);
 Datum parse_thrift_binary_string_internal(uint8* start, uint8* end);
 Datum parse_thrift_binary_bytes_internal(uint8* start, uint8* end);
@@ -79,6 +78,9 @@ uint8 char_to_int8(char c);
 uint8* string_to_bytes(char* value);
 char convert_int8_to_char(uint8 value, bool first_half);
 char* bytes_to_string(uint8* start, int32 len);
+bool is_big_endian(void);
+int64 parse_int_helper(uint8* start, uint8* end, int len);
+void swap_bytes(char* bytes, int len);
 
 bool is_big_endian() {
   uint32 i = 1;
@@ -194,7 +196,7 @@ Datum parse_thrift_binary_int64_internal(uint8* start, uint8* end) {
 }
 
 Datum parse_thrift_binary_struct_bytea_internal(uint8* start, uint8* end) {
-  uint8* next_start = skip_field(start, end, PG_THRIFT_BINARY_STRUCT);
+  uint8* next_start = skip_binary_field(start, end, PG_THRIFT_BINARY_STRUCT);
   int32 len = next_start - start;
   bytea* ret = palloc(len + VARHDRSZ);
   memcpy(VARDATA(ret), start, len);
@@ -221,7 +223,7 @@ Datum parse_thrift_binary_list_bytea_internal(uint8* start, uint8* end) {
   char typalign;
   get_typlenbyvalalign(BYTEAOID, &typlen, &typbyval, &typalign);
   for (int i = 0; i < len; i++) {
-    uint8* p = skip_field(curr, end, element_type);
+    uint8* p = skip_binary_field(curr, end, element_type);
     ret[i] = PointerGetDatum(palloc(p - curr + VARHDRSZ));
     null[i] = false;
     memcpy(VARDATA(ret[i]), curr, p - curr);
@@ -254,7 +256,7 @@ Datum parse_thrift_binary_map_bytea_internal(uint8* start, uint8* end) {
   get_typlenbyvalalign(BYTEAOID, &typlen, &typbyval, &typalign);
   for (int i = 0; i < 2 * len; i++) {
     int type_id = (i % 2 == 0? *start : *(start + 1));
-    uint8* p = skip_field(curr, end, type_id);
+    uint8* p = skip_binary_field(curr, end, type_id);
     ret[i] = PointerGetDatum(palloc(p - curr + VARHDRSZ));
     null[i] = false;
     memcpy(VARDATA(ret[i]), curr, p - curr);
@@ -269,7 +271,7 @@ Datum parse_thrift_binary_map_bytea_internal(uint8* start, uint8* end) {
   );
 }
 
-Datum parse_field(uint8* start, uint8* end, int8 type_id) {
+Datum parse_binary_field(uint8* start, uint8* end, int8 type_id) {
   if (type_id == PG_THRIFT_BINARY_BOOL) {
     return parse_thrift_binary_boolean_internal(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
   }
@@ -308,9 +310,15 @@ Datum parse_field(uint8* start, uint8* end, int8 type_id) {
   elog(ERROR, "Unsupported thrift type");
 }
 
+Datum parse_compact_field(uint8* start, uint8* end, int8 type_id) {
+  elog(ERROR, "Not implemented");
+}
+
+
+
 // give start of data, end of data and type id,
 // return pointer after its end
-uint8* skip_field(uint8* start, uint8* end, int8 field_type) {
+uint8* skip_binary_field(uint8* start, uint8* end, int8 field_type) {
   uint8* ret = 0;
   if (field_type == PG_THRIFT_BINARY_BOOL) {
     ret = start + BOOL_LEN;
@@ -330,7 +338,7 @@ uint8* skip_field(uint8* start, uint8* end, int8 field_type) {
     while (true) {
       if (*ret == 0) break;
       int8 field_type = *ret;
-      ret = skip_field(ret, end, field_type);
+      ret = skip_binary_field(ret, end, field_type);
     }
   } else if (field_type == PG_THRIFT_BINARY_MAP) {
     int8 key_type = *start;
@@ -338,15 +346,15 @@ uint8* skip_field(uint8* start, uint8* end, int8 field_type) {
     int32 len = parse_int_helper(start + 2*PG_THRIFT_TYPE_LEN, end, INT32_LEN);
     ret = start + 2*PG_THRIFT_TYPE_LEN + INT32_LEN;
     for (int i = 0; i < len; i++) {
-      ret = skip_field(ret, end, key_type);
-      ret = skip_field(ret, end, value_type);
+      ret = skip_binary_field(ret, end, key_type);
+      ret = skip_binary_field(ret, end, value_type);
     }
   } else if (field_type == PG_THRIFT_BINARY_SET || field_type == PG_THRIFT_BINARY_LIST) {
     int32 len = parse_int_helper(start + PG_THRIFT_TYPE_LEN, end, INT32_LEN);
     int8 field_type = *start;
     ret = start + PG_THRIFT_TYPE_LEN + INT32_LEN;
     for (int i = 0; i < len; i++) {
-      ret = skip_field(ret, end, field_type);
+      ret = skip_binary_field(ret, end, field_type);
     }
   }
 
@@ -357,6 +365,10 @@ uint8* skip_field(uint8* start, uint8* end, int8 field_type) {
   return ret;
 }
 
+uint8* skip_compact_field(uint8* start, uint8* end, int8 type_id) {
+  elog(ERROR, "Not implemented");
+}
+
 Datum thrift_binary_decode(uint8* data, Size size, int16 field_id, int8 type_id) {
   uint8* start = data, *end = data + size;
   while (start < end) {
@@ -364,20 +376,45 @@ Datum thrift_binary_decode(uint8* data, Size size, int16 field_id, int8 type_id)
     int16 parsed_field_id = parse_int_helper(start + PG_THRIFT_TYPE_LEN, end, FIELD_LEN);
     if (parsed_field_id == field_id) {
       if (*start == type_id) {
-        return parse_field(start, end, type_id);
+        return parse_binary_field(start, end, type_id);
       }
       break;
     } else {
-      int8 type_id = *start;
+      int8 target_type_id = *start;
       start = start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN;
-      start = skip_field(start, end, type_id);
+      start = skip_binary_field(start, end, target_type_id);
     }
   }
   elog(ERROR, "Invalid thrift format");
 }
 
 Datum thrift_compact_decode(uint8* data, Size size, int16 field_id, int8 type_id) {
-  elog(ERROR, "To be implemented");
+  uint8* start = data, *end = data + size;
+  int16 current_field_id = 0;
+  while (start < end) {
+    if (start + PG_THRIFT_TYPE_LEN >= end) break;
+    int8 field_type_id = parse_int_helper(start, end, PG_THRIFT_TYPE_LEN);
+    int8 field_delta = (field_type_id >> 4) & 0x0f;
+    int8 parsed_type_id = field_type_id & 0x0f;
+    if (field_delta != 0) {
+      current_field_id += field_delta;
+    } else {
+      current_field_id = parse_int_helper(start + PG_THRIFT_TYPE_LEN, end, FIELD_LEN);
+    }
+    if (current_field_id == field_id) {
+      if (parsed_type_id == type_id) {
+        return parse_compact_field(start, end, type_id);
+      }
+      break;
+    } else {
+      start += PG_THRIFT_TYPE_LEN;
+      if (field_delta == 0) {
+        start += PG_THRIFT_FIELD_LEN;
+      }
+      start = skip_compact_field(start, end, parsed_type_id);
+    }
+  }
+  elog(ERROR, "Invalid thrift compact format");
 }
 
 Datum thrift_binary_get_bool(PG_FUNCTION_ARGS) {

@@ -3,5 +3,8 @@ os: linux
 sudo: required
 addons:
   postgresql: "9.2"
+before_install:
+  - sudo apt-get update
+  - sudo apt-get install -y postgresql-common postgresql-client-common postgresql-9.2
 script:
   - make install && make installcheck

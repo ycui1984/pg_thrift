@@ -5,8 +5,10 @@ addons:
   postgresql: "9.4"
 before_install:
   - sudo apt-get update
-  - sudo apt-get purge postgresql-9.1 postgresql-9.2 postgresql-9.3
-  - sudo apt-get install postgresql-common postgresql-client-common postgresql-9.4
+  - sudo rm /etc/init.d/postgresql
+  - sudo rm /etc/init/postgresql.conf
+  - sudo apt-get remove postgresql
+  - sudo apt-get install -y postgresql-common postgresql-client-common postgresql-9.4
   - sudo service postgresql start
 script:
   - make install && make installcheck

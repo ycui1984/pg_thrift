@@ -42,6 +42,18 @@ SELECT parse_thrift_binary_string(UNNEST(thrift_binary_get_list_bytea(E'\\x08000
  abcdef
 (2 rows)
 
---TODO: add testing for thrift type
---SELECT thrift_binary_in('{"type" : "byte", "value" : ABCD}');
+-- struct (id = true)
+SELECT thrift_compact_get_bool(E'\\x1100' :: bytea, 1);
+ thrift_compact_get_bool 
+-------------------------
+ t
+(1 row)
+
+-- struct (id = false)
+SELECT thrift_compact_get_bool(E'\\x1200' :: bytea, 1);
+ thrift_compact_get_bool 
+-------------------------
+ f
+(1 row)
+
 DROP EXTENSION pg_thrift;

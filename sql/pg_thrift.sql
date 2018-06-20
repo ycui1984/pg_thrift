@@ -18,7 +18,10 @@ SELECT thrift_binary_get_list_bytea(E'\\x0800010000007b0f00020b00000002000000063
 
 SELECT parse_thrift_binary_string(UNNEST(thrift_binary_get_list_bytea(E'\\x0800010000007b0f00020b00000002000000063132333435360000000661626364656600' :: bytea, 2)));
 
---TODO: add testing for thrift type
---SELECT thrift_binary_in('{"type" : "byte", "value" : ABCD}');
+-- struct (id = true)
+SELECT thrift_compact_get_bool(E'\\x1100' :: bytea, 1);
+
+-- struct (id = false)
+SELECT thrift_compact_get_bool(E'\\x1200' :: bytea, 1);
 
 DROP EXTENSION pg_thrift;

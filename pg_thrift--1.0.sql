@@ -101,6 +101,11 @@ CREATE FUNCTION parse_thrift_binary_map_bytea(bytea)
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
+CREATE FUNCTION thrift_compact_get_bool(bytea, int)
+    RETURNS boolean
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
 CREATE TYPE thrift_binary;
 
 CREATE FUNCTION thrift_binary_in(cstring)

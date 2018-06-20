@@ -63,6 +63,8 @@ Datum parse_thrift_binary_struct_bytea_internal(uint8* start, uint8* end);
 Datum parse_thrift_binary_list_bytea_internal(uint8* start, uint8* end);
 Datum parse_thrift_binary_map_bytea_internal(uint8* start, uint8* end);
 
+Datum parse_thrift_compact_boolean_internal(uint8* start, uint8* end);
+
 uint8* encode_json_to_byte(char* input, int32* plen);
 uint8* encode_bool(char* value);
 uint8* encode_int16(char* value);
@@ -114,9 +116,23 @@ Datum parse_thrift_binary_boolean(PG_FUNCTION_ARGS) {
 
 Datum parse_thrift_binary_boolean_internal(uint8* start, uint8* end) {
   if (start >= end) {
-    elog(ERROR, "Invalid thrift format for bool");
+    elog(ERROR, "Invalid thrift binary format for bool");
   }
   PG_RETURN_BOOL(*start);
+}
+
+Datum parse_thrift_compact_boolean_internal(uint8* start, uint8* end) {
+  if (start >= end) {
+    elog(ERROR, "Invalid thrift compact format for bool");
+  }
+  int8 field_type_id = parse_int_helper(start, end, PG_THRIFT_TYPE_LEN);
+  int8 parsed_type_id = field_type_id & 0x0f;
+  if (parsed_type_id == 1) {
+    PG_RETURN_BOOL(1);
+  } else if (parsed_type_id == 2) {
+    PG_RETURN_BOOL(0);
+  }
+  elog(ERROR, "Invalid thrift compact format for bool");
 }
 
 Datum parse_thrift_binary_string(PG_FUNCTION_ARGS) {
@@ -307,11 +323,14 @@ Datum parse_binary_field(uint8* start, uint8* end, int8 type_id) {
   if (type_id == PG_THRIFT_BINARY_MAP) {
     return parse_thrift_binary_map_bytea_internal(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end);
   }
-  elog(ERROR, "Unsupported thrift type");
+  elog(ERROR, "Unsupported thrift binary type");
 }
 
 Datum parse_compact_field(uint8* start, uint8* end, int8 type_id) {
-  elog(ERROR, "Not implemented");
+  if (type_id == PG_THRIFT_COMPACT_BOOL) {
+    return parse_thrift_compact_boolean_internal(start, end);
+  }
+  elog(ERROR, "Unsupported thrift compact type");
 }
 
 // give start of data, end of data and type id,
@@ -399,8 +418,11 @@ Datum thrift_compact_decode(uint8* data, Size size, int16 field_id, int8 type_id
     } else {
       current_field_id = parse_int_helper(start + PG_THRIFT_TYPE_LEN, end, FIELD_LEN);
     }
+    // char buf[50];
+    // sprintf(buf, "field_id=%d, parsed_type_id=%d", current_field_id, parsed_type_id);
+    // elog(ERROR, buf);
     if (current_field_id == field_id) {
-      if (parsed_type_id == type_id) {
+      if (parsed_type_id == type_id || (type_id == PG_THRIFT_COMPACT_BOOL && parsed_type_id <= type_id)) {
         return parse_compact_field(start, end, type_id);
       }
       break;

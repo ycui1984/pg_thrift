@@ -107,7 +107,7 @@ CREATE FUNCTION thrift_compact_get_bool(bytea, int)
     LANGUAGE C STRICT IMMUTABLE;
 
 CREATE FUNCTION thrift_compact_get_byte(bytea, int)
-    RETURNS boolean
+    RETURNS bytea
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 

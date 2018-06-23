@@ -24,4 +24,13 @@ SELECT thrift_compact_get_bool(E'\\x1100' :: bytea, 1);
 -- struct (id = false)
 SELECT thrift_compact_get_bool(E'\\x1200' :: bytea, 1);
 
+-- struct (id = 123, phones=["123456", "abcdef"])
+SELECT thrift_compact_get_int16(E'\\x14f6011928063132333435360661626364656600' :: bytea, 1);
+
+-- struct (id = 123, phones=["123456", "abcdef"])
+SELECT thrift_compact_get_int32(E'\\x15f6011928063132333435360661626364656600' :: bytea, 1);
+
+-- struct (id = 123, phones=["123456", "abcdef"])
+SELECT thrift_compact_get_int64(E'\\x16f6011928063132333435360661626364656600' :: bytea, 1);
+
 DROP EXTENSION pg_thrift;

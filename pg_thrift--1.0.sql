@@ -106,6 +106,26 @@ CREATE FUNCTION thrift_compact_get_bool(bytea, int)
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
+CREATE FUNCTION thrift_compact_get_byte(bytea, int)
+    RETURNS boolean
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_compact_get_int16(bytea, int)
+    RETURNS int
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_compact_get_int32(bytea, int)
+    RETURNS int
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_compact_get_int64(bytea, int)
+    RETURNS bigint
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
 CREATE TYPE thrift_binary;
 
 CREATE FUNCTION thrift_binary_in(cstring)

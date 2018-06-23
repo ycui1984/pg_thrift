@@ -34,7 +34,10 @@ SELECT thrift_compact_get_int32(E'\\x15f6011928063132333435360661626364656600' :
 SELECT thrift_compact_get_int64(E'\\x16f6011928063132333435360661626364656600' :: bytea, 1);
 
 -- 你好世界
-SELECT thrift_compact_get_byte(E'\\x131a0ce4bda0e5a5bde4b896e7958c00' :: bytea, 1);
+SELECT thrift_compact_get_byte(E'\\x1318e4bda0e5a5bde4b896e7958c00' :: bytea, 1);
+
+-- 你好世界
+SELECT thrift_compact_get_string(E'\\x1818e4bda0e5a5bde4b896e7958c00' :: bytea, 1);
 
 -- 1234567890.1234567890
 SELECT thrift_compact_get_double(E'\\x1741d26580b487e6b700' :: bytea, 1);

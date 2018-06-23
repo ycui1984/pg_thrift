@@ -73,10 +73,12 @@ Datum parse_thrift_binary_struct_bytea_internal(uint8* start, uint8* end);
 Datum parse_thrift_binary_list_bytea_internal(uint8* start, uint8* end);
 Datum parse_thrift_binary_map_bytea_internal(uint8* start, uint8* end);
 
+Datum parse_thrift_compact_string_internal(uint8* start, uint8* end);
 Datum parse_thrift_compact_bytes_internal(uint8* start, uint8* end);
 Datum parse_thrift_compact_int16_internal(uint8* start, uint8* end);
 Datum parse_thrift_compact_int32_internal(uint8* start, uint8* end);
 Datum parse_thrift_compact_int64_internal(uint8* start, uint8* end);
+
 
 uint8* encode_json_to_byte(char* input, int32* plen);
 uint8* encode_bool(char* value);
@@ -167,6 +169,16 @@ Datum parse_thrift_binary_bytes_internal(uint8* start, uint8* end) {
   memcpy(VARDATA(ret), start + BYTE_LEN, len);
   SET_VARSIZE(ret, len + VARHDRSZ);
   PG_RETURN_POINTER(ret);
+}
+
+Datum parse_thrift_compact_string(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  return parse_thrift_compact_bytes_internal((uint8*)VARDATA(data), (uint8*)VARDATA(data) + VARSIZE(data));
+}
+
+Datum parse_thrift_compact_bytes(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  return parse_thrift_compact_bytes_internal((uint8*)VARDATA(data), (uint8*)VARDATA(data) + VARSIZE(data));
 }
 
 Datum parse_thrift_compact_bytes_internal(uint8* start, uint8* end) {
@@ -405,7 +417,12 @@ Datum parse_compact_field(uint8* start, uint8* end, int8 type_id) {
   }
 
   if (type_id == PG_THRIFT_COMPACT_DOUBLE) {
+    // double is same for binary and compact
     return parse_thrift_binary_double_internal(start, end);
+  }
+
+  if (type_id == PG_THRIFT_COMPACT_STRING) {
+    return parse_thrift_compact_bytes_internal(start, end);
   }
 
   elog(ERROR, "Unsupported thrift compact type");

@@ -111,6 +111,11 @@ CREATE FUNCTION thrift_compact_get_byte(bytea, int)
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
+CREATE FUNCTION thrift_compact_get_string(bytea, int)
+    RETURNS text
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
 CREATE FUNCTION thrift_compact_get_int16(bytea, int)
     RETURNS int
     AS 'MODULE_PATHNAME'

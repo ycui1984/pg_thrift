@@ -197,6 +197,12 @@ Datum parse_thrift_binary_double(PG_FUNCTION_ARGS) {
   return parse_thrift_binary_double_internal((uint8*)VARDATA(data), (uint8*)VARDATA(data) + VARSIZE(data));
 }
 
+Datum parse_thrift_compact_double(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  // binary and compact are same for double
+  return parse_thrift_binary_double_internal((uint8*)VARDATA(data), (uint8*)VARDATA(data) + VARSIZE(data));
+}
+
 Datum parse_thrift_binary_double_internal(uint8* start, uint8* end) {
   if (start + DOUBLE_LEN - 1 >= end) {
     elog(ERROR, "Invalid thrift format for double");
@@ -396,6 +402,10 @@ Datum parse_compact_field(uint8* start, uint8* end, int8 type_id) {
 
   if (type_id == PG_THRIFT_COMPACT_INT64) {
     return parse_thrift_compact_int64_internal(start, end);
+  }
+
+  if (type_id == PG_THRIFT_COMPACT_DOUBLE) {
+    return parse_thrift_binary_double_internal(start, end);
   }
 
   elog(ERROR, "Unsupported thrift compact type");

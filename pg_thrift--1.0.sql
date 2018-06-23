@@ -126,6 +126,11 @@ CREATE FUNCTION thrift_compact_get_int64(bytea, int)
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
+CREATE FUNCTION thrift_compact_get_double(bytea, int)
+    RETURNS double precision
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
 CREATE TYPE thrift_binary;
 
 CREATE FUNCTION thrift_binary_in(cstring)

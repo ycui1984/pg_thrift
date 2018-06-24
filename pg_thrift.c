@@ -78,7 +78,9 @@ Datum parse_thrift_compact_bytes_internal(uint8* start, uint8* end);
 Datum parse_thrift_compact_int16_internal(uint8* start, uint8* end);
 Datum parse_thrift_compact_int32_internal(uint8* start, uint8* end);
 Datum parse_thrift_compact_int64_internal(uint8* start, uint8* end);
-
+Datum parse_thrift_compact_struct_bytea_internal(uint8* start, uint8* end);
+Datum parse_thrift_compact_list_bytea_internal(uint8* start, uint8* end);
+Datum parse_thrift_compact_map_bytea_internal(uint8* start, uint8* end);
 
 uint8* encode_json_to_byte(char* input, int32* plen);
 uint8* encode_bool(char* value);
@@ -99,6 +101,7 @@ bool is_big_endian(void);
 int64 parse_int_helper(uint8* start, uint8* end, int len);
 void swap_bytes(char* bytes, int len);
 int64 parse_varint_helper(uint8* start, uint8* end, int64* len_description);
+uint8 compact_list_type_to_struct_type(uint8 element_type);
 
 bool is_big_endian() {
   uint32 i = 1;
@@ -136,6 +139,55 @@ int64 parse_varint_helper(uint8* start, uint8* end, int64* len_length) {
   }
   *len_length = p - start + 1;
   return (val >> 1) ^ -(val & 1);
+}
+
+// skip field is needed in list(set, map) and struct,
+// but types are different, this helper does the mapping
+uint8 compact_list_type_to_struct_type(uint8 element_type) {
+  if (element_type == 2) {
+    return PG_THRIFT_COMPACT_BOOL;
+  }
+
+  if (element_type == 3) {
+    return PG_THRIFT_COMPACT_BYTE;
+  }
+
+  if (element_type == 4) {
+    return PG_THRIFT_COMPACT_DOUBLE;
+  }
+
+  if (element_type == 6) {
+    return PG_THRIFT_COMPACT_INT16;
+  }
+
+  if (element_type == 8) {
+    return PG_THRIFT_COMPACT_INT32;
+  }
+
+  if (element_type == 10) {
+    return PG_THRIFT_COMPACT_INT64;
+  }
+
+  if (element_type == 11) {
+    return PG_THRIFT_COMPACT_STRING;
+  }
+
+  if (element_type == 12) {
+    return PG_THRIFT_COMPACT_STRUCT;
+  }
+
+  if (element_type == 13) {
+    return PG_THRIFT_COMPACT_MAP;
+  }
+
+  if (element_type == 14) {
+    return PG_THRIFT_COMPACT_SET;
+  }
+
+  if (element_type == 15) {
+    return PG_THRIFT_COMPACT_LIST;
+  }
+  elog(ERROR, "Invalid thrift compact element type");
 }
 
 Datum parse_thrift_binary_boolean(PG_FUNCTION_ARGS) {
@@ -293,6 +345,15 @@ Datum parse_thrift_binary_struct_bytea_internal(uint8* start, uint8* end) {
   PG_RETURN_POINTER(ret);
 }
 
+Datum parse_thrift_compact_struct_bytea_internal(uint8* start, uint8* end) {
+  uint8* next_start = skip_compact_field(start, end, PG_THRIFT_COMPACT_STRUCT);
+  int32 len = next_start - start;
+  bytea* ret = palloc(len + VARHDRSZ);
+  memcpy(VARDATA(ret), start, len);
+  SET_VARSIZE(ret, len + VARHDRSZ);
+  PG_RETURN_POINTER(ret);
+}
+
 Datum parse_thrift_binary_list_bytea(PG_FUNCTION_ARGS) {
   bytea* data = PG_GETARG_BYTEA_P(0);
   return parse_thrift_binary_list_bytea_internal((uint8*)VARDATA(data), (uint8*)VARDATA(data) + VARSIZE(data));
@@ -300,7 +361,7 @@ Datum parse_thrift_binary_list_bytea(PG_FUNCTION_ARGS) {
 
 Datum parse_thrift_binary_list_bytea_internal(uint8* start, uint8* end) {
   if (start + PG_THRIFT_TYPE_LEN + LIST_LEN - 1 >= end) {
-    elog(ERROR, "Invalid thrift format for list");
+    elog(ERROR, "Invalid thrift binary format for list");
   }
   int8 element_type = *start;
   int32 len = parse_int_helper(start + PG_THRIFT_TYPE_LEN, end, LIST_LEN);
@@ -327,6 +388,47 @@ Datum parse_thrift_binary_list_bytea_internal(uint8* start, uint8* end) {
   );
 }
 
+Datum parse_thrift_compact_list_bytea(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  return parse_thrift_compact_list_bytea_internal((uint8*)VARDATA(data), (uint8*)VARDATA(data) + VARSIZE(data));
+}
+
+Datum parse_thrift_compact_list_bytea_internal(uint8* start, uint8* end) {
+  if (start + PG_THRIFT_TYPE_LEN >= end) {
+    elog(ERROR, "Invalid thrift compact format for list");
+  }
+  uint8 size_type_id = parse_int_helper(start, end, PG_THRIFT_TYPE_LEN);
+  uint8 type_id = size_type_id & 0x0f;
+  uint32 len = (size_type_id & 0xf0) >> 4;
+  uint8* curr = start;
+  if (len == 0xf) {
+    int64 size_len = 0;
+    len = parse_varint_helper(start + PG_THRIFT_TYPE_LEN, end, &size_len);
+    curr = start + PG_THRIFT_TYPE_LEN + size_len;
+  } else {
+    curr = start + PG_THRIFT_TYPE_LEN;
+  }
+  Datum ret[THRIFT_RESULT_MAX_FIELDS];
+  bool null[THRIFT_RESULT_MAX_FIELDS], typbyval;
+  int16 typlen;
+  char typalign;
+  get_typlenbyvalalign(BYTEAOID, &typlen, &typbyval, &typalign);
+  for (int i = 0; i < len; i++) {
+    uint8* p = skip_compact_field(curr, end, compact_list_type_to_struct_type(type_id));
+    ret[i] = PointerGetDatum(palloc(p - curr + VARHDRSZ));
+    null[i] = false;
+    memcpy(VARDATA(ret[i]), curr, p - curr);
+    SET_VARSIZE(ret[i], p - curr + VARHDRSZ);
+    curr = p;
+  }
+  int dims[MAXDIM], lbs[MAXDIM], ndims = 1;
+  dims[0] = len;
+  lbs[0] = 1;
+  PG_RETURN_POINTER(
+    construct_md_array(ret, null, ndims, dims, lbs, BYTEAOID, typlen, typbyval, typalign)
+  );
+}
+
 Datum parse_thrift_binary_map_bytea(PG_FUNCTION_ARGS) {
   bytea* data = PG_GETARG_BYTEA_P(0);
   return parse_thrift_binary_map_bytea_internal((uint8*)VARDATA(data), (uint8*)VARDATA(data) + VARSIZE(data));
@@ -334,7 +436,7 @@ Datum parse_thrift_binary_map_bytea(PG_FUNCTION_ARGS) {
 
 Datum parse_thrift_binary_map_bytea_internal(uint8* start, uint8* end) {
   if (start + 2*PG_THRIFT_TYPE_LEN + INT32_LEN - 1 >= end) {
-    elog(ERROR, "Invalid thrift format for map");
+    elog(ERROR, "Invalid thrift binary format for map");
   }
   int32 len = parse_int_helper(start + 2*PG_THRIFT_TYPE_LEN, end, INT32_LEN);
   uint8* curr = start + 2*PG_THRIFT_TYPE_LEN + INT32_LEN;
@@ -346,6 +448,44 @@ Datum parse_thrift_binary_map_bytea_internal(uint8* start, uint8* end) {
   for (int i = 0; i < 2 * len; i++) {
     int type_id = (i % 2 == 0? *start : *(start + 1));
     uint8* p = skip_binary_field(curr, end, type_id);
+    ret[i] = PointerGetDatum(palloc(p - curr + VARHDRSZ));
+    null[i] = false;
+    memcpy(VARDATA(ret[i]), curr, p - curr);
+    SET_VARSIZE(ret[i], p - curr + VARHDRSZ);
+    curr = p;
+  }
+  int dims[MAXDIM], lbs[MAXDIM], ndims = 1;
+  dims[0] = 2*len;
+  lbs[0] = 1;
+  PG_RETURN_POINTER(
+    construct_md_array(ret, null, ndims, dims, lbs, BYTEAOID, typlen, typbyval, typalign)
+  );
+}
+
+Datum parse_thrift_compact_map_bytea(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  return parse_thrift_compact_map_bytea_internal((uint8*)VARDATA(data), (uint8*)VARDATA(data) + VARSIZE(data));
+}
+
+Datum parse_thrift_compact_map_bytea_internal(uint8* start, uint8* end) {
+  if (start >= end) {
+    elog(ERROR, "Invalid thrift compact format for map");
+  }
+  int64 size_len = 0;
+  int32 len = parse_varint_helper(start, end, &size_len);
+  uint8* curr = start + size_len;
+  Datum ret[THRIFT_RESULT_MAX_FIELDS];
+  bool null[THRIFT_RESULT_MAX_FIELDS], typbyval;
+  int16 typlen;
+  char typalign;
+  get_typlenbyvalalign(BYTEAOID, &typlen, &typbyval, &typalign);
+  uint8 type_id = *curr;
+  uint8 key_type_id = compact_list_type_to_struct_type((type_id & 0xf0) >> 4);
+  uint8 value_type_id = compact_list_type_to_struct_type(type_id & 0xf0);
+  curr = curr + PG_THRIFT_TYPE_LEN;
+  for (int i = 0; i < 2 * len; i++) {
+    int type_id = (i % 2 == 0? key_type_id : value_type_id);
+    uint8* p = skip_compact_field(curr, end, type_id);
     ret[i] = PointerGetDatum(palloc(p - curr + VARHDRSZ));
     null[i] = false;
     memcpy(VARDATA(ret[i]), curr, p - curr);
@@ -423,6 +563,18 @@ Datum parse_compact_field(uint8* start, uint8* end, int8 type_id) {
 
   if (type_id == PG_THRIFT_COMPACT_STRING) {
     return parse_thrift_compact_bytes_internal(start, end);
+  }
+
+  if (type_id == PG_THRIFT_COMPACT_LIST || type_id == PG_THRIFT_COMPACT_SET) {
+    return parse_thrift_compact_list_bytea_internal(start, end);
+  }
+
+  if (type_id == PG_THRIFT_COMPACT_MAP) {
+    return parse_thrift_compact_map_bytea_internal(start, end);
+  }
+
+  if (type_id == PG_THRIFT_COMPACT_STRUCT) {
+    return parse_thrift_compact_struct_bytea_internal(start, end);
   }
 
   elog(ERROR, "Unsupported thrift compact type");

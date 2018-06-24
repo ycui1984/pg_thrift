@@ -598,11 +598,11 @@ uint8* skip_binary_field(uint8* start, uint8* end, int8 field_type) {
   } else if (field_type == PG_THRIFT_BINARY_INT64) {
     ret = start + INT64_LEN;
   } else if (field_type == PG_THRIFT_BINARY_STRUCT) {
-    ret = start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN;
+    ret = start;
     while (true) {
       if (*ret == 0) break;
       int8 field_type = *ret;
-      ret = skip_binary_field(ret, end, field_type);
+      ret = skip_binary_field(ret + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end, field_type);
     }
   } else if (field_type == PG_THRIFT_BINARY_MAP) {
     int8 key_type = *start;
@@ -629,8 +629,73 @@ uint8* skip_binary_field(uint8* start, uint8* end, int8 field_type) {
   return ret;
 }
 
-uint8* skip_compact_field(uint8* start, uint8* end, int8 type_id) {
-  elog(ERROR, "Not implemented");
+uint8* skip_compact_field(uint8* start, uint8* end, int8 field_type) {
+  uint8* ret = 0;
+  if (field_type == PG_THRIFT_COMPACT_BOOL) {
+    ret = start + BOOL_LEN;
+  } else if (field_type == PG_THRIFT_COMPACT_BYTE || field_type == PG_THRIFT_COMPACT_STRING) {
+    int64 len_length = 0;
+    int32 len = parse_varint_helper(start, end, &len_length);
+    ret = start + len_length + len;
+  } else if (field_type == PG_THRIFT_COMPACT_DOUBLE) {
+    ret = start + DOUBLE_LEN;
+  } else if (
+    field_type == PG_THRIFT_COMPACT_INT16 ||
+    field_type == PG_THRIFT_COMPACT_INT32 ||
+    field_type == PG_THRIFT_COMPACT_INT64
+  ) {
+    int64 len = 0;
+    parse_varint_helper(start, end, &len);
+    ret = start + len;
+  } else if (
+    field_type == PG_THRIFT_COMPACT_SET ||
+    field_type == PG_THRIFT_BINARY_LIST
+  ) {
+    uint8 len_type_id = parse_int_helper(start, end, PG_THRIFT_TYPE_LEN);
+    uint32 len = (len_type_id & 0xf0) >> 4;
+    uint8 type_id = len_type_id & 0x0f;
+    if (len == 0x0f) {
+      int64 len_length = 0;
+      len = parse_varint_helper(start + PG_THRIFT_TYPE_LEN, end, &len_length);
+      ret = start + PG_THRIFT_TYPE_LEN + len_length;
+    } else {
+      ret = start + PG_THRIFT_TYPE_LEN;
+    }
+    for (int i = 0; i < len; i++) {
+      ret = skip_compact_field(ret, end, compact_list_type_to_struct_type(type_id));
+    }
+  } else if (field_type == PG_THRIFT_COMPACT_MAP) {
+      int64 len_length = 0;
+      int32 len = parse_varint_helper(start, end, &len_length);
+      uint8 key_value_type_id = parse_int_helper(start + len_length, end, PG_THRIFT_TYPE_LEN);
+      uint8 key_type = (key_value_type_id & 0xf0) >> 4;
+      uint8 value_type = (key_value_type_id & 0x0f);
+      ret = start + len_length + PG_THRIFT_TYPE_LEN;
+      for (int i = 0; i < len; i++) {
+        ret = skip_compact_field(ret, end, compact_list_type_to_struct_type(key_type));
+        ret = skip_compact_field(ret, end, compact_list_type_to_struct_type(value_type));
+      }
+  } else if (field_type == PG_THRIFT_COMPACT_STRUCT) {
+    ret = start;
+    while (true) {
+      if (*ret == 0) break;
+      uint8 field_type_id = parse_int_helper(ret, end, PG_THRIFT_TYPE_LEN);
+      if ((field_type_id & 0xf0) == 0) {
+        ret = start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN;
+      } else {
+        ret = start + PG_THRIFT_TYPE_LEN;
+      }
+      ret = skip_compact_field(ret, end, field_type_id);
+    }
+  } else {
+    elog(ERROR, "Invalid thrift compact field type");
+  }
+
+  if (ret > end) {
+    elog(ERROR, "Invalid thrift compact format");
+  }
+
+  return ret;
 }
 
 Datum thrift_binary_decode(uint8* data, Size size, int16 field_id, int8 type_id) {

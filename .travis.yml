@@ -20,4 +20,4 @@ install:
 services:
   - postgresql
 script:
-  - sudo service postgresql start && sudo make install
+  - sudo service postgresql start && sudo make install && sudo make installcheck

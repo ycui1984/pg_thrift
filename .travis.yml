@@ -12,4 +12,4 @@ matrix:
 services:
   - postgresql
 script:
-  - sudo make install && sudo make installcheck
+  - sudo make install

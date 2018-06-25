@@ -20,4 +20,4 @@ install:
   - install_uncrustify
   - install_pg
 script:
-  - make install && make installcheck
+  - sudo make install && sudo make installcheck

@@ -9,7 +9,5 @@ matrix:
     - env: PGVERSION=9.6
     - env: PGVERSION=10
     - env: PGVERSION=11
-services:
-  - postgresql
 script:
   - sudo make install

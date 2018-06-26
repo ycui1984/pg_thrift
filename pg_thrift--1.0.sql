@@ -136,6 +136,67 @@ CREATE FUNCTION thrift_compact_get_double(bytea, int)
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT IMMUTABLE;
 
+CREATE FUNCTION thrift_compact_get_list_bytea(bytea, int)
+    RETURNS bytea[]
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_compact_get_struct_bytea(bytea, int)
+    RETURNS bytea
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_compact_get_set_bytea(bytea, int)
+    RETURNS bytea[]
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION thrift_compact_get_map_bytea(bytea, int)
+    RETURNS bytea[]
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+
+CREATE FUNCTION parse_thrift_compact_string(bytea)
+    RETURNS text
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION parse_thrift_compact_bytes(bytea)
+    RETURNS bytea
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION parse_thrift_compact_int16(bytea)
+    RETURNS int
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION parse_thrift_compact_int32(bytea)
+    RETURNS int
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION parse_thrift_compact_int64(bytea)
+    RETURNS bigint
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION parse_thrift_compact_double(bytea)
+    RETURNS double precision
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION parse_thrift_compact_list_bytea(bytea)
+    RETURNS bytea[]
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
+CREATE FUNCTION parse_thrift_compact_map_bytea(bytea)
+    RETURNS bytea[]
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C STRICT IMMUTABLE;
+
 CREATE TYPE thrift_binary;
 
 CREATE FUNCTION thrift_binary_in(cstring)

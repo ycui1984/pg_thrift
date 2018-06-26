@@ -42,4 +42,10 @@ SELECT thrift_compact_get_string(E'\\x1818e4bda0e5a5bde4b896e7958c00' :: bytea, 
 -- 1234567890.1234567890
 SELECT thrift_compact_get_double(E'\\x1741d26580b487e6b700' :: bytea, 1);
 
+-- [1, 2, 3, 4, 5]
+SELECT parse_thrift_compact_int16(UNNEST(thrift_compact_get_list_bytea(E'\\x1956020406080a00' :: bytea, 1)));
+
+-- [1, 2, 3, 4, 5]
+SELECT parse_thrift_compact_int32(UNNEST(thrift_compact_get_set_bytea(E'\\x1a58020406080a00' :: bytea, 1)));
+
 DROP EXTENSION pg_thrift;

@@ -120,4 +120,18 @@ SELECT parse_thrift_compact_int32(UNNEST(thrift_compact_get_set_bytea(E'\\x1a580
                           5
 (5 rows)
 
+-- {'a' : 2}
+SELECT parse_thrift_compact_string((thrift_compact_get_map_bytea(E'\\x1b02b602610400' :: bytea, 1))[1]);
+ parse_thrift_compact_string 
+-----------------------------
+ a
+(1 row)
+
+-- {'a' : 2}
+SELECT parse_thrift_compact_int16((thrift_compact_get_map_bytea(E'\\x1b02b602610400' :: bytea, 1))[2]);
+ parse_thrift_compact_int16 
+----------------------------
+                          2
+(1 row)
+
 DROP EXTENSION pg_thrift;

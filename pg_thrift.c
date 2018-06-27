@@ -481,7 +481,7 @@ Datum parse_thrift_compact_map_bytea_internal(uint8* start, uint8* end) {
   get_typlenbyvalalign(BYTEAOID, &typlen, &typbyval, &typalign);
   uint8 type_id = *curr;
   uint8 key_type_id = compact_list_type_to_struct_type((type_id & 0xf0) >> 4);
-  uint8 value_type_id = compact_list_type_to_struct_type(type_id & 0xf0);
+  uint8 value_type_id = compact_list_type_to_struct_type(type_id & 0x0f);
   curr = curr + PG_THRIFT_TYPE_LEN;
   for (int i = 0; i < 2 * len; i++) {
     int type_id = (i % 2 == 0? key_type_id : value_type_id);
@@ -722,9 +722,9 @@ Datum thrift_compact_decode(uint8* data, Size size, int16 field_id, int8 type_id
   int16 current_field_id = 0;
   while (start < end) {
     if (start + PG_THRIFT_TYPE_LEN >= end) break;
-    int8 field_type_id = parse_int_helper(start, end, PG_THRIFT_TYPE_LEN);
-    int8 field_delta = (field_type_id >> 4) & 0x0f;
-    int8 parsed_type_id = field_type_id & 0x0f;
+    uint8 field_type_id = parse_int_helper(start, end, PG_THRIFT_TYPE_LEN);
+    uint8 field_delta = (field_type_id >> 4) & 0x0f;
+    uint8 parsed_type_id = field_type_id & 0x0f;
     if (field_delta != 0) {
       current_field_id += field_delta;
     } else {

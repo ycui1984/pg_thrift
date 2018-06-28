@@ -364,6 +364,9 @@ Datum parse_thrift_binary_list_bytea_internal(uint8* start, uint8* end) {
     elog(ERROR, "Invalid thrift binary format for list");
   }
   int8 element_type = *start;
+  // char buf[50];
+  // sprintf(buf, "type=%d", element_type);
+  // elog(ERROR, buf);
   int32 len = parse_int_helper(start + PG_THRIFT_TYPE_LEN, end, LIST_LEN);
   uint8* curr = start + PG_THRIFT_TYPE_LEN + LIST_LEN;
 
@@ -600,7 +603,7 @@ uint8* skip_binary_field(uint8* start, uint8* end, int8 field_type) {
   } else if (field_type == PG_THRIFT_BINARY_STRUCT) {
     ret = start;
     while (true) {
-      if (*ret == 0) break;
+      if (*ret == 0) { ret += 1; break; }
       int8 field_type = *ret;
       ret = skip_binary_field(ret + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end, field_type);
     }

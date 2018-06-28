@@ -1,7 +1,8 @@
 [![Build Status](https://travis-ci.org/charles-cui/pg_thrift.svg?branch=master)](https://travis-ci.org/charles-cui/pg_thrift)
 
-# pg\_thrift Thrift support for PostgreSQL
+## Thrift support for PostgreSQL (pg\_thrift)
 
+## Install
 ## Step1. Install PostgreSQL
 ```
 brew install postgresql

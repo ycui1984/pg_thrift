@@ -46,6 +46,31 @@ postgres=# \dx
 ```
 
 
+## API
+## Thrift Binary Protocol API:
+```
+thrift_binary_get_bool          //get bool from struct bytea
+thrift_binary_get_byte          //get byte from struct bytea
+thrift_binary_get_double        //get double from struct bytea
+thrift_binary_get_int16         //get int16 from struct bytea
+thrift_binary_get_int32         //get int32 from struct bytea
+thrift_binary_get_int64         //get int64 from struct bytea
+thrift_binary_get_string        //get string from struct bytea
+thrift_binary_get_struct_bytea  //get struct bytea from struct bytea
+thrift_binary_get_list_bytea    //get array of bytea from struct bytea
+thrift_binary_get_set_bytea     //get array of bytea from struct bytea
+thrift_binary_get_map_bytea     //get array of bytea from struct bytea
+
+parse_thrift_binary_boolean     //get bool from bytea
+parse_thrift_binary_string      //get string from bytea
+parse_thrift_binary_bytes       //get bytes from bytea
+parse_thrift_binary_int16       //get int16 from bytea
+parse_thrift_binary_int32       //get int32 from bytea
+parse_thrift_binary_int64       //get int64 from bytea
+parse_thrift_binary_double      //get double from bytea
+parse_thrift_binary_list_bytea  //get array of bytea from bytea
+parse_thrift_binary_map_bytea   //get array of bytea from bytea
+```
 ## Creating Index Based on Thrift Bytes:
 
 ```

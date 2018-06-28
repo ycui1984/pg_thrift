@@ -96,6 +96,7 @@ parse_thrift_compact_map_bytea  /* get array of bytea from bytea */
 ```
 
 ## API Use Case1. Parse field (using compact protocol):
+```
 --struct(id=[1, 2, 3, 4, 5])
 SELECT parse_thrift_compact_int32(UNNEST(thrift_compact_get_set_bytea(E'\\x1a58020406080a00' :: bytea, 1)));
   parse_thrift_compact_int32
@@ -107,7 +108,7 @@ SELECT parse_thrift_compact_int32(UNNEST(thrift_compact_get_set_bytea(E'\\x1a580
                            5
  (5 rows)
 
- 
+
 -- struct(id=123, phones=["123456", "abcdef"])  //item1
 -- struct(id=456, phones=["123456", "abcdef"])  //item2
 -- struct(id=123, items=[item1, item2])
@@ -119,7 +120,7 @@ SELECT parse_thrift_compact_string(UNNEST(thrift_compact_get_list_bytea(UNNEST(t
   123456
   abcdef
  (4 rows)
-
+```
 
 ## API Use Case2. Creating Index Based on Thrift Bytes (using binary protocol):
 ```

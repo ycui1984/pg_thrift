@@ -54,4 +54,12 @@ SELECT parse_thrift_compact_string((thrift_compact_get_map_bytea(E'\\x1b02b60261
 -- {'a' : 2}
 SELECT parse_thrift_compact_int16((thrift_compact_get_map_bytea(E'\\x1b02b602610400' :: bytea, 1))[2]);
 
+-- struct(id=123, phones=["123456", "abcdef"])
+SELECT parse_thrift_compact_string(UNNEST(thrift_compact_get_list_bytea(E'\\x15f601192b0c3132333435360c61626364656600', 2)));
+
+-- struct(id=123, phones=["123456", "abcdef"])
+-- struct(id=456, phones=["123456", "abcdef"])
+-- struct(id=123, items=[item1, item2])
+SELECT parse_thrift_compact_string(UNNEST(thrift_compact_get_list_bytea(UNNEST(thrift_compact_get_list_bytea(E'\\x15f601192c15f601192b0c3132333435360c61626364656600159007192b0c3132333435360c6162636465660000', 2)), 2)));
+
 DROP EXTENSION pg_thrift;

@@ -415,6 +415,9 @@ Datum parse_thrift_compact_list_bytea_internal(uint8* start, uint8* end) {
   get_typlenbyvalalign(BYTEAOID, &typlen, &typbyval, &typalign);
   for (int i = 0; i < len; i++) {
     uint8* p = skip_compact_field(curr, end, compact_list_type_to_struct_type(type_id));
+    // char buf[50];
+    // sprintf(buf, "*p=%d", *p);
+    // elog(ERROR, buf);
     ret[i] = PointerGetDatum(palloc(p - curr + VARHDRSZ));
     null[i] = false;
     memcpy(VARDATA(ret[i]), curr, p - curr);
@@ -649,7 +652,7 @@ uint8* skip_compact_field(uint8* start, uint8* end, int8 field_type) {
     ret = start + len;
   } else if (
     field_type == PG_THRIFT_COMPACT_SET ||
-    field_type == PG_THRIFT_BINARY_LIST
+    field_type == PG_THRIFT_COMPACT_LIST
   ) {
     uint8 len_type_id = parse_int_helper(start, end, PG_THRIFT_TYPE_LEN);
     uint32 len = (len_type_id & 0xf0) >> 4;
@@ -678,14 +681,17 @@ uint8* skip_compact_field(uint8* start, uint8* end, int8 field_type) {
   } else if (field_type == PG_THRIFT_COMPACT_STRUCT) {
     ret = start;
     while (true) {
-      if (*ret == 0) break;
-      uint8 field_type_id = parse_int_helper(ret, end, PG_THRIFT_TYPE_LEN);
-      if ((field_type_id & 0xf0) == 0) {
-        ret = start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN;
-      } else {
-        ret = start + PG_THRIFT_TYPE_LEN;
+      if (*ret == 0) {
+        ret += 1; break;
       }
-      ret = skip_compact_field(ret, end, field_type_id);
+      uint8 field_type_id = parse_int_helper(ret, end, PG_THRIFT_TYPE_LEN);
+      uint8 type_id = field_type_id & 0x0f;
+      if ((field_type_id & 0xf0) == 0) {
+        ret += PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN;
+      } else {
+        ret += PG_THRIFT_TYPE_LEN;
+      }
+      ret = skip_compact_field(ret, end, type_id);
     }
   } else {
     elog(ERROR, "Invalid thrift compact field type");

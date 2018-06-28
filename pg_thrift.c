@@ -415,9 +415,6 @@ Datum parse_thrift_compact_list_bytea_internal(uint8* start, uint8* end) {
   get_typlenbyvalalign(BYTEAOID, &typlen, &typbyval, &typalign);
   for (int i = 0; i < len; i++) {
     uint8* p = skip_compact_field(curr, end, compact_list_type_to_struct_type(type_id));
-    // char buf[50];
-    // sprintf(buf, "*p=%d", *p);
-    // elog(ERROR, buf);
     ret[i] = PointerGetDatum(palloc(p - curr + VARHDRSZ));
     null[i] = false;
     memcpy(VARDATA(ret[i]), curr, p - curr);

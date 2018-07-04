@@ -1,6 +1,16 @@
 [![Build Status](https://travis-ci.org/charles-cui/pg_thrift.svg?branch=master)](https://travis-ci.org/charles-cui/pg_thrift)
 
 ## Thrift support for PostgreSQL (pg\_thrift)
+## Motivation
+One of advantages of document-oriented databases like MongoDB or Couchbase over RDBMSs is an ability to change the data scheme easily, fast and often. The traditional approach in RDBMS world involves doing an expensive ALTER TABLE operation, slow upgrade of an existing data, and stuff like this. This approach is often slow and inconvenient for application developers.
+
+To solve this issue PostgreSQL provides JSON and JSONB datatypes. Unfortunately JSONB has a disadvantage of storing all documents keys, which is a lot of redundant data.
+
+One possibility to to reduce JSONB redundancy is to use zson extension. It compresses JSONB documents using shared dictionary of common strings that appear in all or most documents. This approach has its limitations though. Particularly, since data schema evolves, the dictionary has to be updated from time to time. Also zson can affect the build-in mechanism of PostgreSQL of compressing data using PGLZ algorithm since this mechanism uses some heuristics to recognize data that compresses well. Thus sometimes zson can reduce the overall performance.
+
+There is another extension --- pg_protobuf. Basically it provides Protobuf support for PostgreSQL. It seems to solve all the issues described above and doesn't have any disadvantages of zson extension.
+
+The idea of this project is to create a similar extension that would provide Thrift support. Some users may prefer Thrift to Protobuf or just use it by historical reasons. This project is a bit more complicated than pg_protobuf since unlike Protobuf Thrift support various encoding protocols.
 
 ## Install
 ## Step1. Install PostgreSQL

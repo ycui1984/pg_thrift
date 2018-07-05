@@ -5,6 +5,7 @@
 #include <utils/array.h>
 #include <utils/lsyscache.h>
 #include <utils/json.h>
+#include <utils/jsonb.h>
 #include "pg_thrift.h"
 
 PG_MODULE_MAGIC;
@@ -55,6 +56,11 @@ PG_FUNCTION_INFO_V1(parse_thrift_compact_double);
 PG_FUNCTION_INFO_V1(parse_thrift_compact_list_bytea);
 PG_FUNCTION_INFO_V1(parse_thrift_compact_map_bytea);
 
+PG_FUNCTION_INFO_V1(jsonb_to_thrift_binary);
+//PG_FUNCTION_INFO_V1(thrift_binary_to_jsonb);
+Datum thrift_binary_to_json(int type, uint8* start, uint8* end);
+Datum jsonb_to_thrift_binary_helper(char* type, JsonbValue jbv);
+
 Datum thrift_binary_decode(uint8* data, Size size, int16 field_id, int8 type_id);
 Datum thrift_compact_decode(uint8* data, Size size, int16 field_id, int8 type_id);
 Datum parse_binary_field(uint8* start, uint8* end, int8 type_id);
@@ -82,17 +88,14 @@ Datum parse_thrift_compact_struct_bytea_internal(uint8* start, uint8* end);
 Datum parse_thrift_compact_list_bytea_internal(uint8* start, uint8* end);
 Datum parse_thrift_compact_map_bytea_internal(uint8* start, uint8* end);
 
-uint8* encode_json_to_byte(char* input, int32* plen);
-uint8* encode_bool(char* value);
-uint8* encode_int16(char* value);
-uint8* encode_int32(char* value);
-uint8* encode_int64(char* value);
-uint8* encode_double(char* value);
-uint8* encode_string(char* value);
-uint8* encode_byte(char* value);
-Datum bytea_to_json(int type, uint8* start, uint8* end);
-char* parse_json_type(char* input);
-char* parse_json_value(char* input);
+uint8* encode_binary_bool(char* value);
+uint8* encode_binary_int16(char* value);
+uint8* encode_binary_int32(char* value);
+uint8* encode_binary_int64(char* value);
+uint8* encode_binary_double(char* value);
+uint8* encode_binary_string(char* value);
+uint8* encode_binary_byte(char* value);
+
 uint8 char_to_int8(char c);
 uint8* string_to_bytes(char* value);
 char convert_int8_to_char(uint8 value, bool first_half);
@@ -934,7 +937,7 @@ Datum thrift_compact_get_map_bytea(PG_FUNCTION_ARGS) {
   return thrift_compact_decode(data, size, field_id, PG_THRIFT_COMPACT_MAP);
 }
 
-uint8* encode_bool(char* value) {
+uint8* encode_binary_bool(char* value) {
   uint8* ret = palloc(PG_THRIFT_TYPE_LEN + BOOL_LEN);
   *ret = PG_THRIFT_BINARY_BOOL;
   bool v = atoi(value);
@@ -942,7 +945,7 @@ uint8* encode_bool(char* value) {
   return ret;
 }
 
-uint8* encode_int16(char* value) {
+uint8* encode_binary_int16(char* value) {
   uint8* ret = palloc(PG_THRIFT_TYPE_LEN + INT16_LEN);
   *ret = PG_THRIFT_BINARY_INT16;
   int16 v = atoi(value);
@@ -953,7 +956,7 @@ uint8* encode_int16(char* value) {
   return ret;
 }
 
-uint8* encode_int32(char* value) {
+uint8* encode_binary_int32(char* value) {
   uint8* ret = palloc(PG_THRIFT_TYPE_LEN + INT32_LEN);
   *ret = PG_THRIFT_BINARY_INT32;
   int32 v = atoi(value);
@@ -964,7 +967,7 @@ uint8* encode_int32(char* value) {
   return ret;
 }
 
-uint8* encode_int64(char* value) {
+uint8* encode_binary_int64(char* value) {
   uint8* ret = palloc(PG_THRIFT_TYPE_LEN + INT64_LEN);
   *ret = PG_THRIFT_BINARY_INT64;
   int64 v = atol(value);
@@ -975,7 +978,7 @@ uint8* encode_int64(char* value) {
   return ret;
 }
 
-uint8* encode_double(char* value) {
+uint8* encode_binary_double(char* value) {
   uint8* ret = palloc(PG_THRIFT_TYPE_LEN + DOUBLE_LEN);
   *ret = PG_THRIFT_BINARY_DOUBLE;
   float8 v = atof(value);
@@ -986,7 +989,7 @@ uint8* encode_double(char* value) {
   return ret;
 }
 
-uint8* encode_string(char* value) {
+uint8* encode_binary_string(char* value) {
   uint8* ret = palloc(PG_THRIFT_TYPE_LEN + BYTE_LEN + strlen(value));
   *ret = PG_THRIFT_BINARY_STRING;
   int32 len = strlen(value);
@@ -1034,7 +1037,7 @@ char* bytes_to_string(uint8* start, int32 len) {
   return ret;
 }
 
-uint8* encode_byte(char* value) {
+uint8* encode_binary_byte(char* value) {
   int32 bytes = strlen(value) / 2;
   uint8* ret = palloc(PG_THRIFT_TYPE_LEN + BYTE_LEN + bytes);
   *ret = PG_THRIFT_BINARY_BYTE;
@@ -1047,134 +1050,86 @@ uint8* encode_byte(char* value) {
   return ret;
 }
 
-//TODO: implement actual json parsing
-char* parse_json_type(char* input) {
-  return "byte";
-}
+// typedef enum
+// {
+//  WJB_DONE,  0
+//  WJB_KEY,   1
+//  WJB_VALUE, 2
+//  WJB_ELEM,  3
+//  WJB_BEGIN_ARRAY, 4
+//  WJB_END_ARRAY, 5
+//  WJB_BEGIN_OBJECT, 6
+//  WJB_END_OBJECT 7
+// } JsonbIteratorToken;
+//
 
-//TODO: implement actual json parsing
-char* parse_json_value(char* input) {
-  return "ABCD";
-}
-
-uint8* encode_json_to_byte(char* input, int32* plen) {
-  char* type = parse_json_type(input);
-  char* value = parse_json_value(input);
-  if (0 == strcmp("bool", type)) {
-    *plen = BOOL_LEN;
-    return encode_bool(value);
-  }
-
-  if (0 == strcmp("int16", type)) {
-    *plen = INT16_LEN;
-    return encode_int16(value);
-  }
-
-  if (0 == strcmp("int32", type)) {
-    *plen = INT32_LEN;
-    return encode_int32(value);
-  }
-
-  if (0 == strcmp("int64", type)) {
-    *plen = INT64_LEN;
-    return encode_int64(value);
-  }
-
-  if (0 == strcmp("double", type)) {
-    *plen = DOUBLE_LEN;
-    return encode_double(value);
-  }
-
-  if (0 == strcmp("string", type)) {
-    *plen = BYTE_LEN + strlen(value);
-    return encode_string(value);
-  }
-
-  if (0 == strcmp("byte", type)) {
-    if (strlen(value) % 2 != 0) {
-      elog(ERROR, "Invalid byte format");
+Datum jsonb_to_thrift_binary_helper(char* type, JsonbValue jbv) {
+  int32 len = 0;
+  uint8* data = 0;
+  if (0 == strcmp(type, "bool")) {
+    if (jbv.type != jbvNumeric) {
+      elog(ERROR, "bool jsonb value should be numeric");
     }
-    *plen = BYTE_LEN + strlen(value) / 2;
-    return encode_byte(value);
+    data = encode_binary_bool(numeric_normalize(jbv.val.numeric));
+    len = PG_THRIFT_TYPE_LEN + BOOL_LEN;
+  } else if (0 == strcmp(type, "int16")) {
+    if (jbv.type != jbvNumeric) {
+      elog(ERROR, "int16 jsonb value should be numeric");
+    }
+    data = encode_binary_int16(numeric_normalize(jbv.val.numeric));
+    len = PG_THRIFT_TYPE_LEN + INT16_LEN;
   }
+  bytea* ret = palloc(len + VARHDRSZ);
+  memcpy(VARDATA(ret), data, len);
+  SET_VARSIZE(ret, len + VARHDRSZ);
+  PG_RETURN_BYTEA_P(ret);
+}
 
-  // if (0 == strcmp("list", type) || 0 == strcmp("set", type)) {
-  //   int32 len = 0;
-  //   char*[] list = parse_list(value, &len);
-  //   if (len == 0) {
-  //     elog(ERROR, "array length is 0");
-  //   }
-  //   int32 size = 2*PG_THRIFT_TYPE_LEN + INT32_LEN;
-  //   uint8* ret = palloc(size);
-  //   *ret = PG_THRIFT_BINARY_LIST;
-  //   memcpy(ret + 2*PG_THRIFT_TYPE_LEN, &len, INT32_LEN);
-  //   if (!is_big_endian()) {
-  //     swap_bytes((char*)(ret + 2*PG_THRIFT_TYPE_LEN), INT32_LEN);
-  //   }
-  //   for (int i = 0; i < len; i++) {
-  //     int32 element_len = 0;
-  //     uint8* element = encode_json_to_byte(list[i], &element_len);
-  //     repalloc(ret, size + element_len);
-  //     memcpy(ret + size, element + PG_THRIFT_TYPE_LEN, element_len);
-  //     size += element_len;
-  //     if (i == 0) {
-  //       ret[i + PG_THRIFT_TYPE_LEN] = element[0];
-  //     }
-  //   }
-  //   return ret;
-  // }
-  //
-  // if (0 == strcmp("map", type)) {
-  //   int32 len = 0;
-  //   char*[] list = parse_list(value, &len);
-  //   if (len == 0 || len % 2 == 1) {
-  //     elog(ERROR, "Invalid map element count");
-  //   }
-  //   int32 size = 3*PG_THRIFT_TYPE_LEN + INT32_LEN;
-  //   uint8* ret = palloc(size);
-  //   *ret = PG_THRIFT_BINARY_MAP;
-  //   memcpy(ret + 3*PG_THRIFT_TYPE_LEN, &len, INT32_LEN);
-  //   if (!is_big_endian()) {
-  //     swap_bytes((char*)(ret + 3*PG_THRIFT_TYPE_LEN), INT32_LEN);
-  //   }
-  //   for (int i = 0; i < len; i++) {
-  //     int32 element_len = 0;
-  //     uint8* element = encode_json_to_byte(list[i], &element_len);
-  //     repalloc(ret, size + element_len);
-  //     memcpy(ret + size, element + PG_THRIFT_TYPE_LEN, element_len);
-  //     size += element_len;
-  //     if (i == 0 || i == 1) {
-  //       ret[i + PG_THRIFT_TYPE_LEN] = element[0];
-  //     }
-  //   }
-  //   return ret;
-  // }
-  //
-  // if (0 == strcmp("struct", type)) {
-  //   int32 len = 0, size = PG_THRIFT_TYPE_LEN;
-  //   char*[] list = parse_map(value, &len);
-  //   uint8* ret = palloc(size + 1);
-  //   *ret = PG_THRIFT_BINARY_STRUCT;
-  //   for (int i = 0; i < len; i++) {
-  //     int16 field_id = -1;
-  //     uint8* field_json = parse_map_element(list[i], &field_id);
-  //     int32 field_len = 0;
-  //     uint8* encoded_field = encode_json_to_byte(field_json, &field_len);
-  //     uint8* field_buf = palloc(PG_THRIFT_TYPE_LEN + FIELD_LEN + field_len);
-  //     *field_buf = *encode_field;
-  //     memcpy(field_buf + PG_THRIFT_TYPE_LEN, &field_id, FIELD_LEN);
-  //     if (!is_big_endian()) {
-  //       swap_bytes((char*)(field_buf + PG_THRIFT_TYPE_LEN), FIELD_LEN);
-  //     }
-  //     memcpy(field_buf + PG_THRIFT_TYPE_LEN + FIELD_LEN, encoded_field + PG_THRIFT_TYPE_LEN, field_len);
-  //     repalloc(ret, size + PG_THRIFT_TYPE_LEN + FIELD_LEN + field_len);
-  //     memcpy(ret + size, field_buf, PG_THRIFT_TYPE_LEN + FIELD_LEN + field_len);
-  //     size += PG_THRIFT_TYPE_LEN + FIELD_LEN + field_len;
-  //   }
-  //   *ret[size] = 0;
-  //   return ret;
-  // }
-  elog(ERROR, "Unsupported thrift type");
+Datum jsonb_to_thrift_binary(PG_FUNCTION_ARGS) {
+  Jsonb* jsonb = PG_GETARG_JSONB(0);
+  JsonbIterator* it = JsonbIteratorInit(&jsonb->root);
+  JsonbValue v, jbv;
+  int key_count = 0, value_count = 0;
+  uint32 r;
+  char* typebuf = (char*)palloc(16);
+  memset(typebuf, 0, 16);
+  while ((r = JsonbIteratorNext(&it, &v, true)) != WJB_DONE) {
+    if (r == WJB_KEY) {
+      key_count += 1;
+      if (key_count > 2) {
+        elog(ERROR, "Must have 2 keys at top level");
+      }
+      if (key_count == 1) {
+        if (v.type != jbvString) {
+          elog(ERROR, "First field must be string");
+        }
+        if (0 != strncmp("type", v.val.string.val, strlen("type"))) {
+          elog(ERROR, "First field must called type");
+        }
+      } else if (key_count == 2) {
+        if (v.type != jbvString) {
+          elog(ERROR, "Second field must be string");
+        }
+        if (0 != strncmp("value", v.val.string.val, strlen("value"))) {
+          elog(ERROR, "Second field must called value");
+        }
+      }
+    } else if (r == WJB_VALUE) {
+      value_count += 1;
+      if (value_count > 2) {
+        elog(ERROR, "Must have 2 values at top level");
+      }
+      if (value_count == 1) {
+        if (v.type != jbvString) {
+          elog(ERROR, "First value must be string");
+        }
+        snprintf(typebuf, v.val.string.len + 1, "%s", v.val.string.val);
+      } else if (value_count == 2) {
+        jbv = v;
+      }
+    }
+  }
+  return jsonb_to_thrift_binary_helper(typebuf, jbv);
 }
 
 /*
@@ -1182,89 +1137,28 @@ uint8* encode_json_to_byte(char* input, int32* plen) {
  * otherwise hard to recover by just using raw bytes
  */
 Datum thrift_binary_in(PG_FUNCTION_ARGS) {
-  char* input = PG_GETARG_CSTRING(0);
-  int32 len = 0;
-  uint8* data = encode_json_to_byte(input, &len);
-  bytea* ret = palloc(PG_THRIFT_TYPE_LEN + len + VARHDRSZ);
-  memcpy(VARDATA(ret), data, PG_THRIFT_TYPE_LEN + len);
-  SET_VARSIZE(ret, PG_THRIFT_TYPE_LEN + len + VARHDRSZ);
-  PG_RETURN_BYTEA_P(ret);
+  Datum string_datum = CStringGetDatum(PG_GETARG_CSTRING(0));
+  Datum jsonb_datum = DirectFunctionCall1(jsonb_in, string_datum);
+  Datum thrift_datum = DirectFunctionCall1(jsonb_to_thrift_binary, jsonb_datum);
+  PG_RETURN_BYTEA_P(DatumGetByteaP(thrift_datum));
 }
 
-Datum bytea_to_json(int type, uint8* start, uint8* end) {
-  char* typeStr = "";
+Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
+  char* typeStr;
+  char* retStr = palloc(MAX_JSON_STRING_SIZE);
   if (type == PG_THRIFT_BINARY_BOOL) {
     typeStr = "bool";
     int64 value = DatumGetBool(parse_thrift_binary_boolean_internal(start, end));
-    char* retStr = palloc(MAX_JSON_STRING_SIZE);
     sprintf(retStr, "{\"type\":\"%s\",\"value\":%ld}", typeStr, value);
     return CStringGetDatum(retStr);
   }
-
-  if (type == PG_THRIFT_BINARY_INT16) {
-    typeStr = "int16";
-    int16 value = DatumGetInt16(parse_thrift_binary_int16_internal(start, end));
-    char* retStr = palloc(MAX_JSON_STRING_SIZE);
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":%hd}", typeStr, value);
-    return CStringGetDatum(retStr);
-  }
-
-  if (type == PG_THRIFT_BINARY_INT32) {
-    typeStr = "int32";
-    int32 value = DatumGetInt32(parse_thrift_binary_int32_internal(start, end));
-    char* retStr = palloc(MAX_JSON_STRING_SIZE);
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":%d}", typeStr, value);
-    return CStringGetDatum(retStr);
-  }
-
-  if (type == PG_THRIFT_BINARY_INT64) {
-    typeStr = "int64";
-    int64 value = DatumGetInt64(parse_thrift_binary_int64_internal(start, end));
-    char* retStr = palloc(MAX_JSON_STRING_SIZE);
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":%ld}", typeStr, value);
-    return CStringGetDatum(retStr);
-  }
-
-  if (type == PG_THRIFT_BINARY_DOUBLE) {
-    typeStr = "double";
-    float8 value = DatumGetFloat8(parse_thrift_binary_double_internal(start, end));
-    char* retStr = palloc(MAX_JSON_STRING_SIZE);
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":%f}", typeStr, value);
-    return CStringGetDatum(retStr);
-  }
-
-  if (type == PG_THRIFT_BINARY_STRING) {
-    typeStr = "string";
-    char* value = DatumGetCString(parse_thrift_binary_string_internal(start, end));
-    char* retStr = palloc(MAX_JSON_STRING_SIZE);
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
-    return CStringGetDatum(retStr);
-  }
-
-  if (type == PG_THRIFT_BINARY_BYTE) {
-    typeStr = "byte";
-    uint8* byte = (uint8*)DatumGetPointer(parse_thrift_binary_bytes_internal(start, end));
-    uint8* data = (uint8*)VARDATA(byte);
-    uint8 size = VARSIZE(byte);
-    char* value = bytes_to_string(data, size - BYTE_LEN);
-    char* retStr = palloc(MAX_JSON_STRING_SIZE);
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
-    return CStringGetDatum(retStr);
-  }
-
-  // if (type == PG_THRIFT_BINARY_LIST || type == PG_THRIFT_BINARY_SET) {
-  //   typeStr = "list";
-  //   ArrayType  *val = DatumGetArrayTypeP(parse_thrift_binary_list_bytea_internal(start, end));
-  // }
-
-  elog(ERROR, "Unsupported type");
+  elog(ERROR, "Unsupported type convert from binary to json");
 }
-
 
 Datum thrift_binary_out(PG_FUNCTION_ARGS) {
   bytea* thrift_bytes = PG_GETARG_BYTEA_P(0);
   uint8* data = (uint8*)VARDATA(thrift_bytes);
   int size = VARSIZE(thrift_bytes);
   int type = *data;
-  return bytea_to_json(type, data + PG_THRIFT_TYPE_LEN, data + size);
+  return thrift_binary_to_json(type, data + PG_THRIFT_TYPE_LEN, data + size);
 }

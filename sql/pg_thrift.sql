@@ -67,4 +67,6 @@ SELECT parse_thrift_compact_string(UNNEST(thrift_compact_get_list_bytea(UNNEST(t
 -- struct (id = 123, phones=[struct1, struct2])
 SELECT parse_thrift_binary_string(UNNEST(thrift_binary_get_list_bytea(UNNEST(thrift_binary_get_list_bytea(E'\\x0800010000007b0f00020c000000020800010000007b0f00020b000000020000000631323334353600000006616263646566000800010000007b0f00020b0000000200000006313233343536000000066162636465660000' :: bytea, 2)), 2)));
 
+SELECT thrift_binary_in('{"type" : "bool", "value" : 1}');
+
 DROP EXTENSION pg_thrift;

@@ -1152,6 +1152,12 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
     sprintf(retStr, "{\"type\":\"%s\",\"value\":%ld}", typeStr, value);
     return CStringGetDatum(retStr);
   }
+  if (type == PG_THRIFT_BINARY_INT16) {
+    typeStr = "int16";
+    int16 value = DatumGetInt16(parse_thrift_binary_int16_internal(start, end));
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":%hd}", typeStr, value);
+    return CStringGetDatum(retStr);
+  }
   elog(ERROR, "Unsupported type convert from binary to json");
 }
 

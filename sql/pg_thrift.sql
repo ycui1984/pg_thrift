@@ -69,4 +69,6 @@ SELECT parse_thrift_binary_string(UNNEST(thrift_binary_get_list_bytea(UNNEST(thr
 
 SELECT thrift_binary_in('{"type" : "bool", "value" : 1}');
 
+SELECT thrift_binary_in('{"type" : "int16", "value" : 60}');
+
 DROP EXTENSION pg_thrift;

@@ -1078,7 +1078,20 @@ Datum jsonb_to_thrift_binary_helper(char* type, JsonbValue jbv) {
     }
     data = encode_binary_int16(numeric_normalize(jbv.val.numeric));
     len = PG_THRIFT_TYPE_LEN + INT16_LEN;
+  } else if (0 == strcmp(type, "int32")) {
+    if (jbv.type != jbvNumeric) {
+      elog(ERROR, "int32 jsonb value should be numeric");
+    }
+    data = encode_binary_int32(numeric_normalize(jbv.val.numeric));
+    len = PG_THRIFT_TYPE_LEN + INT32_LEN;
+  } else if (0 == strcmp(type, "int64")) {
+    if (jbv.type != jbvNumeric) {
+      elog(ERROR, "int64 jsonb value should be numberic");
+    }
+    data = encode_binary_int64(numeric_normalize(jbv.val.numeric));
+    len = PG_THRIFT_TYPE_LEN + INT64_LEN;
   }
+
   bytea* ret = palloc(len + VARHDRSZ);
   memcpy(VARDATA(ret), data, len);
   SET_VARSIZE(ret, len + VARHDRSZ);
@@ -1156,6 +1169,18 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
     typeStr = "int16";
     int16 value = DatumGetInt16(parse_thrift_binary_int16_internal(start, end));
     sprintf(retStr, "{\"type\":\"%s\",\"value\":%hd}", typeStr, value);
+    return CStringGetDatum(retStr);
+  }
+  if (type == PG_THRIFT_BINARY_INT32) {
+    typeStr = "int32";
+    int32 value = DatumGetInt32(parse_thrift_binary_int32_internal(start, end));
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":%d}", typeStr, value);
+    return CStringGetDatum(retStr);
+  }
+  if (type == PG_THRIFT_BINARY_INT64) {
+    typeStr = "int64";
+    int64 value = DatumGetInt64(parse_thrift_binary_int64_internal(start, end));
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":%ld}", typeStr, value);
     return CStringGetDatum(retStr);
   }
   elog(ERROR, "Unsupported type convert from binary to json");

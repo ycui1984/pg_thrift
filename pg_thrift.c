@@ -4,7 +4,6 @@
 #include <utils/builtins.h>
 #include <utils/array.h>
 #include <utils/lsyscache.h>
-#include <utils/json.h>
 #include <utils/jsonb.h>
 #include "pg_thrift.h"
 
@@ -1096,6 +1095,15 @@ Datum jsonb_to_thrift_binary_helper(char* type, JsonbValue jbv) {
     }
     len = PG_THRIFT_TYPE_LEN + DOUBLE_LEN;
     data = encode_binary_double(numeric_normalize(jbv.val.numeric));
+  } else if (0 == strcmp(type, "string")) {
+    if (jbv.type != jbvString) {
+      elog(ERROR, "string jsonb value should be string");
+    }
+    len = PG_THRIFT_TYPE_LEN + BYTE_LEN + jbv.val.string.len;
+    char *tmp = (char*)palloc(jbv.val.string.len + 1);
+    memset(tmp, 0, jbv.val.string.len + 1);
+    memcpy(tmp, jbv.val.string.val, jbv.val.string.len);
+    data = encode_binary_string(tmp);
   }
   bytea* ret = palloc(len + VARHDRSZ);
   memcpy(VARDATA(ret), data, len);
@@ -1192,6 +1200,12 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
     typeStr = "double";
     float8 value = DatumGetFloat8(parse_thrift_binary_double_internal(start, end));
     sprintf(retStr, "{\"type\":\"%s\",\"value\":%f}", typeStr, value);
+    return CStringGetDatum(retStr);
+  }
+  if (type == PG_THRIFT_BINARY_STRING) {
+    typeStr = "string";
+    char* value = DatumGetCString(parse_thrift_binary_string_internal(start, end));
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":\"%s\"}", typeStr, value);
     return CStringGetDatum(retStr);
   }
   elog(ERROR, "Unsupported type convert from binary to json");

@@ -196,4 +196,10 @@ SELECT thrift_binary_in('{"type":"double", "value" :123456.789}');
  {"type":"double","value":123456.789000}
 (1 row)
 
+SELECT thrift_binary_in('{"type": "string", "value" : "你好世界"}');
+             thrift_binary_in             
+------------------------------------------
+ {"type":"string","value":"你好世界"}
+(1 row)
+
 DROP EXTENSION pg_thrift;

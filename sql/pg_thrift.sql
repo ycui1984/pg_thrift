@@ -75,4 +75,6 @@ SELECT thrift_binary_in('{"type" : "int32", "value" : 123}');
 
 SELECT thrift_binary_in('{"type" : "int64", "value" : 123456789}');
 
+SELECT thrift_binary_in('{"type":"double", "value" :123456.789}');
+
 DROP EXTENSION pg_thrift;

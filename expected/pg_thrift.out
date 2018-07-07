@@ -202,4 +202,10 @@ SELECT thrift_binary_in('{"type": "string", "value" : "你好世界"}');
  {"type":"string","value":"你好世界"}
 (1 row)
 
+SELECT thrift_binary_in('{"type" : "byte", "value" : "1212"}');
+        thrift_binary_in        
+--------------------------------
+ {"type":"byte","value":"1212"}
+(1 row)
+
 DROP EXTENSION pg_thrift;

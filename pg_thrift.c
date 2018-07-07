@@ -1104,6 +1104,18 @@ Datum jsonb_to_thrift_binary_helper(char* type, JsonbValue jbv) {
     memset(tmp, 0, jbv.val.string.len + 1);
     memcpy(tmp, jbv.val.string.val, jbv.val.string.len);
     data = encode_binary_string(tmp);
+  } else if (0 == strcmp(type, "byte")) {
+    if (jbv.type != jbvString) {
+      elog(ERROR, "byte jsonb value should be string");
+    }
+    if (jbv.val.string.len % 2 != 0) {
+      elog(ERROR, "Invalid byte format");
+    }
+    len = PG_THRIFT_TYPE_LEN + BYTE_LEN + jbv.val.string.len / 2;
+    char *tmp = (char*)palloc(jbv.val.string.len + 1);
+    memset(tmp, 0, jbv.val.string.len + 1);
+    memcpy(tmp, jbv.val.string.val, jbv.val.string.len);
+    data = encode_binary_byte(tmp);
   }
   bytea* ret = palloc(len + VARHDRSZ);
   memcpy(VARDATA(ret), data, len);
@@ -1206,6 +1218,13 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
     typeStr = "string";
     char* value = DatumGetCString(parse_thrift_binary_string_internal(start, end));
     sprintf(retStr, "{\"type\":\"%s\",\"value\":\"%s\"}", typeStr, value);
+    return CStringGetDatum(retStr);
+  }
+  if (type == PG_THRIFT_BINARY_BYTE) {
+    typeStr = "byte";
+    bytea* value = DatumGetByteaP(parse_thrift_binary_bytes_internal(start, end));
+    char* tmp = bytes_to_string((uint8*)VARDATA(value), VARSIZE(value) - VARHDRSZ);
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":\"%s\"}", typeStr, tmp);
     return CStringGetDatum(retStr);
   }
   elog(ERROR, "Unsupported type convert from binary to json");

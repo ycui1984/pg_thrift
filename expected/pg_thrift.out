@@ -196,10 +196,10 @@ SELECT thrift_binary_in('{"type":"double", "value" :123456.789}');
  {"type":"double","value":123456.789000}
 (1 row)
 
-SELECT thrift_binary_in('{"type": "string", "value" : "你好世界"}');
+SELECT thrift_binary_in('{"type": "string", "value" : "hello world!"}');
              thrift_binary_in             
 ------------------------------------------
- {"type":"string","value":"你好世界"}
+ {"type":"string","value":"hello world!"}
 (1 row)
 
 SELECT thrift_binary_in('{"type" : "byte", "value" : "1212"}');

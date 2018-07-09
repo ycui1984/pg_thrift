@@ -1150,6 +1150,50 @@ Datum jsonb_to_thrift_binary_helper(char* type, JsonbValue jbv) {
     }
     len = current_len;
     data = list;
+  } else if (0 == strcmp(type, "map")) {
+    if (jbv.type != jbvBinary) {
+      elog(ERROR, "array jsonb value must be binary");
+    }
+    Jsonb* jb = JsonbValueToJsonb(&jbv);
+    JsonbIterator* it = JsonbIteratorInit(&jb->root);
+    JsonbValue element;
+    uint32 r, current_len = 3*PG_THRIFT_TYPE_LEN + LIST_LEN, size = 0;
+    uint8* list = (uint8*)palloc(current_len);
+    *list = PG_THRIFT_BINARY_MAP;
+    while ((r = JsonbIteratorNext(&it, &element, true)) != WJB_DONE) {
+      if (r == WJB_BEGIN_ARRAY || r == WJB_END_ARRAY) continue;
+      size += 1;
+      JsonbValue element_copy = element;
+      Datum thrift_datum = DirectFunctionCall1(jsonb_to_thrift_binary, JsonbGetDatum(JsonbValueToJsonb(&element_copy)));
+      bytea* one_element_bytea = DatumGetByteaP(thrift_datum);
+      if (size == 1) {
+        *(list + PG_THRIFT_TYPE_LEN) = *VARDATA(one_element_bytea);
+      } else if (size == 2) {
+        *(list + 2*PG_THRIFT_TYPE_LEN) = *VARDATA(one_element_bytea);
+      } else if (size % 2 == 1) {
+        if (*(list + PG_THRIFT_TYPE_LEN) != *VARDATA(one_element_bytea)) {
+          elog(ERROR, "type of map key element must be the same");
+        }
+      } else if (size % 2 == 0) {
+        if (*(list + 2*PG_THRIFT_TYPE_LEN) != *VARDATA(one_element_bytea)) {
+          elog(ERROR, "type of map value element must be the same");
+        }
+      }
+      int32 one_data_len = VARSIZE(one_element_bytea) - VARHDRSZ - PG_THRIFT_TYPE_LEN;
+      list = repalloc(list, current_len + one_data_len);
+      memcpy(list + current_len, VARDATA(one_element_bytea) + PG_THRIFT_TYPE_LEN, one_data_len);
+      current_len += one_data_len;
+    }
+    if (size % 2 != 0) {
+      elog(ERROR, "map must have same number of key and value");
+    }
+    size /= 2;
+    memcpy(list + 3*PG_THRIFT_TYPE_LEN, &size, LIST_LEN);
+    if (!is_big_endian()) {
+      swap_bytes((char*)list + 3*PG_THRIFT_TYPE_LEN, LIST_LEN);
+    }
+    len = current_len;
+    data = list;
   }
   bytea* ret = palloc(len + VARHDRSZ);
   memcpy(VARDATA(ret), data, len);
@@ -1274,6 +1318,32 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
     while(array_iterate(iter, &element, &is_null)) {
       bytea* element_bytea = DatumGetByteaP(element);
       Datum string_datum = thrift_binary_to_json(*start, (uint8*)VARDATA(element_bytea), (uint8*)VARDATA(element_bytea) + VARSIZE(element_bytea) - VARHDRSZ);
+      char* one_element = DatumGetCString(string_datum);
+      if (size != 0) {
+        sprintf(value + strlen(value), "%s", ",");
+      }
+      sprintf(value + strlen(value), "%s", one_element);
+      size += 1;
+    }
+    sprintf(value + strlen(value), "%s", "]");
+    array_free_iterator(iter);
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":\"%s\"}", typeStr, value);
+    return CStringGetDatum(retStr);
+  }
+  if (type == PG_THRIFT_BINARY_MAP) {
+    typeStr = "map";
+    Datum array_datum = parse_thrift_binary_map_bytea_internal(start, end), element;
+    ArrayType* parray = DatumGetArrayTypeP(array_datum);
+    bool is_null;
+    ArrayIterator iter = array_create_iterator(parray, 0);
+    int size = 0;
+    char value[1024];
+    memset(value, 0, 1024);
+    sprintf(value + strlen(value), "%s", "[");
+    while(array_iterate(iter, &element, &is_null)) {
+      bytea* element_bytea = DatumGetByteaP(element);
+      int type = (size % 2 == 0)? *start : *(start + PG_THRIFT_TYPE_LEN);
+      Datum string_datum = thrift_binary_to_json(type, (uint8*)VARDATA(element_bytea), (uint8*)VARDATA(element_bytea) + VARSIZE(element_bytea) - VARHDRSZ);
       char* one_element = DatumGetCString(string_datum);
       if (size != 0) {
         sprintf(value + strlen(value), "%s", ",");

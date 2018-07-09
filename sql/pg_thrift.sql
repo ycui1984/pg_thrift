@@ -85,4 +85,6 @@ SELECT thrift_binary_in('{"type": "list", "value": [{"type":"int32", "value":1},
 
 SELECT thrift_binary_in('{"type": "set", "value": [{"type":"int32", "value":3000}, {"type":"int32", "value":4000}]}');
 
+SELECT thrift_binary_in('{"type": "map", "value": [{"type":"int32", "value":3000}, {"type":"string", "value":"hello world"}, {"type":"int32", "value":123}, {"type":"string", "value":"nice"}]}');
+
 DROP EXTENSION pg_thrift;

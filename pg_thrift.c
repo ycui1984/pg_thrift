@@ -120,7 +120,7 @@ void swap_bytes(char* bytes, int len) {
 }
 
 int64 parse_int_helper(uint8* start, uint8* end, int len) {
-  if (start + len >= end) {
+  if (start + len > end) {
     elog(ERROR, "Invalid thrift format for int");
   }
   int64 val = 0;
@@ -368,7 +368,6 @@ Datum parse_thrift_binary_list_bytea_internal(uint8* start, uint8* end) {
   int8 element_type = *start;
   int32 len = parse_int_helper(start + PG_THRIFT_TYPE_LEN, end, LIST_LEN);
   uint8* curr = start + PG_THRIFT_TYPE_LEN + LIST_LEN;
-
   Datum ret[THRIFT_RESULT_MAX_FIELDS];
   bool null[THRIFT_RESULT_MAX_FIELDS], typbyval;
   int16 typlen;
@@ -1116,6 +1115,41 @@ Datum jsonb_to_thrift_binary_helper(char* type, JsonbValue jbv) {
     memset(tmp, 0, jbv.val.string.len + 1);
     memcpy(tmp, jbv.val.string.val, jbv.val.string.len);
     data = encode_binary_byte(tmp);
+  } else if (0 == strcmp(type, "list") || 0 == strcmp(type, "set")) {
+    if (jbv.type != jbvBinary) {
+      elog(ERROR, "array jsonb value must be binary");
+    }
+    Jsonb* jb = JsonbValueToJsonb(&jbv);
+    JsonbIterator* it = JsonbIteratorInit(&jb->root);
+    JsonbValue element;
+    int32 target_type = -1;
+    uint32 r, current_len = 2*PG_THRIFT_TYPE_LEN + LIST_LEN, size = 0;
+    uint8* list = (uint8*)palloc(current_len);
+    *list = (0 == strcmp(type, "list"))? PG_THRIFT_BINARY_LIST : PG_THRIFT_BINARY_SET;
+    while ((r = JsonbIteratorNext(&it, &element, true)) != WJB_DONE) {
+      if (r == WJB_BEGIN_ARRAY || r == WJB_END_ARRAY) continue;
+      size += 1;
+      JsonbValue element_copy = element;
+      Datum thrift_datum = DirectFunctionCall1(jsonb_to_thrift_binary, JsonbGetDatum(JsonbValueToJsonb(&element_copy)));
+      bytea* one_element_bytea = DatumGetByteaP(thrift_datum);
+      if (target_type == -1) {
+        *(list + PG_THRIFT_TYPE_LEN) = *VARDATA(one_element_bytea);
+      } else {
+        if (target_type != *VARDATA(one_element_bytea)) {
+          elog(ERROR, "type of list element must be the same");
+        }
+      }
+      int32 one_data_len = VARSIZE(one_element_bytea) - VARHDRSZ - PG_THRIFT_TYPE_LEN;
+      list = repalloc(list, current_len + one_data_len);
+      memcpy(list + current_len, VARDATA(one_element_bytea) + PG_THRIFT_TYPE_LEN, one_data_len);
+      current_len += one_data_len;
+    }
+    memcpy(list + 2*PG_THRIFT_TYPE_LEN, &size, LIST_LEN);
+    if (!is_big_endian()) {
+      swap_bytes((char*)list + 2*PG_THRIFT_TYPE_LEN, LIST_LEN);
+    }
+    len = current_len;
+    data = list;
   }
   bytea* ret = palloc(len + VARHDRSZ);
   memcpy(VARDATA(ret), data, len);
@@ -1225,6 +1259,31 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
     bytea* value = DatumGetByteaP(parse_thrift_binary_bytes_internal(start, end));
     char* tmp = bytes_to_string((uint8*)VARDATA(value), VARSIZE(value) - VARHDRSZ);
     sprintf(retStr, "{\"type\":\"%s\",\"value\":\"%s\"}", typeStr, tmp);
+    return CStringGetDatum(retStr);
+  }
+  if (type == PG_THRIFT_BINARY_LIST || type == PG_THRIFT_BINARY_SET) {
+    typeStr = (type == PG_THRIFT_BINARY_LIST)? "list" : "set";
+    Datum array_datum = parse_thrift_binary_list_bytea_internal(start, end), element;
+    ArrayType* parray = DatumGetArrayTypeP(array_datum);
+    bool is_null;
+    ArrayIterator iter = array_create_iterator(parray, 0);
+    int size = 0;
+    char value[1024];
+    memset(value, 0, 1024);
+    sprintf(value + strlen(value), "%s", "[");
+    while(array_iterate(iter, &element, &is_null)) {
+      bytea* element_bytea = DatumGetByteaP(element);
+      Datum string_datum = thrift_binary_to_json(*start, (uint8*)VARDATA(element_bytea), (uint8*)VARDATA(element_bytea) + VARSIZE(element_bytea) - VARHDRSZ);
+      char* one_element = DatumGetCString(string_datum);
+      if (size != 0) {
+        sprintf(value + strlen(value), "%s", ",");
+      }
+      sprintf(value + strlen(value), "%s", one_element);
+      size += 1;
+    }
+    sprintf(value + strlen(value), "%s", "]");
+    array_free_iterator(iter);
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":\"%s\"}", typeStr, value);
     return CStringGetDatum(retStr);
   }
   elog(ERROR, "Unsupported type convert from binary to json");

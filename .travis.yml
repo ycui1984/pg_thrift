@@ -2,11 +2,11 @@ language: c
 services:
   - postgresql
 addons:
-  postgresql: "10"
+  postgresql: "10.0"
 before_install:
   - sudo apt-get update -qq
 before_script:
-  - sudo apt-get install postgresql-server-dev-10
+  - sudo apt-get install postgresql-server-dev-10.0
   - sudo apt-get install postgresql-common
 script:
   - make && sudo make install && make installcheck

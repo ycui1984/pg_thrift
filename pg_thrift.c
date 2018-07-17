@@ -1048,19 +1048,6 @@ uint8* encode_binary_byte(char* value) {
   return ret;
 }
 
-// typedef enum
-// {
-//  WJB_DONE,  0
-//  WJB_KEY,   1
-//  WJB_VALUE, 2
-//  WJB_ELEM,  3
-//  WJB_BEGIN_ARRAY, 4
-//  WJB_END_ARRAY, 5
-//  WJB_BEGIN_OBJECT, 6
-//  WJB_END_OBJECT 7
-// } JsonbIteratorToken;
-//
-
 Datum jsonb_to_thrift_binary_helper(char* type, JsonbValue jbv) {
   int32 len = 0;
   uint8* data = 0;
@@ -1194,6 +1181,53 @@ Datum jsonb_to_thrift_binary_helper(char* type, JsonbValue jbv) {
     }
     len = current_len;
     data = list;
+  } else if (0 == strcmp(type, "struct")) {
+    // typedef enum
+    // {
+    //  WJB_DONE,  0
+    //  WJB_KEY,   1
+    //  WJB_VALUE, 2
+    //  WJB_ELEM,  3
+    //  WJB_BEGIN_ARRAY, 4
+    //  WJB_END_ARRAY, 5
+    //  WJB_BEGIN_OBJECT, 6
+    //  WJB_END_OBJECT 7
+    // } JsonbIteratorToken;
+    //
+    if (jbv.type != jbvBinary) {
+      elog(ERROR, "struct jsonb value must be binary");
+    }
+    Jsonb* jb = JsonbValueToJsonb(&jbv);
+    JsonbIterator* it = JsonbIteratorInit(&jb->root);
+    JsonbValue element;
+    uint32 r, current_len = 1;
+    uint16 field_id = 0;
+    uint8* pData = (uint8*) palloc(current_len);
+    *pData = PG_THRIFT_BINARY_STRUCT;
+    while ((r = JsonbIteratorNext(&it, &element, true)) != WJB_DONE) {
+      if (r == WJB_BEGIN_OBJECT || r == WJB_END_OBJECT) continue;
+      if (r == WJB_KEY) {
+        field_id += 1;
+      } else if (r == WJB_VALUE) {
+        JsonbValue element_copy = element;
+        Datum thrift_datum = DirectFunctionCall1(jsonb_to_thrift_binary, JsonbGetDatum(JsonbValueToJsonb(&element_copy)));
+        bytea* one_field = DatumGetByteaP(thrift_datum);
+        pData = repalloc(pData, current_len + VARSIZE(one_field) - VARHDRSZ + FIELD_LEN);
+        *(pData + current_len) = *VARDATA(one_field);
+        memcpy(pData + current_len + PG_THRIFT_TYPE_LEN, &field_id, FIELD_LEN);
+        if (!is_big_endian) {
+          swap_bytes((char*)pData + current_len + PG_THRIFT_TYPE_LEN, FIELD_LEN);
+        }
+        memcpy(pData + current_len + PG_THRIFT_TYPE_LEN + FIELD_LEN, VARDATA(one_field) + PG_THRIFT_TYPE_LEN, VARSIZE(one_field) - VARHDRSZ - PG_THRIFT_TYPE_LEN);
+        current_len += VARSIZE(one_field) - VARHDRSZ + FIELD_LEN;
+      }
+    }
+    pData = repalloc(pData, current_len + 1);
+    *(pData + current_len) = 0;
+    len = current_len + 1;
+    data = pData;
+  } else {
+    elog(ERROR, "Unsupported type for thrift binary");
   }
   bytea* ret = palloc(len + VARHDRSZ);
   memcpy(VARDATA(ret), data, len);
@@ -1327,7 +1361,7 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
     }
     sprintf(value + strlen(value), "%s", "]");
     array_free_iterator(iter);
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":\"%s\"}", typeStr, value);
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
     return CStringGetDatum(retStr);
   }
   if (type == PG_THRIFT_BINARY_MAP) {
@@ -1353,7 +1387,30 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
     }
     sprintf(value + strlen(value), "%s", "]");
     array_free_iterator(iter);
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":\"%s\"}", typeStr, value);
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
+    return CStringGetDatum(retStr);
+  }
+  if (type == PG_THRIFT_BINARY_STRUCT) {
+    typeStr = "struct";
+    uint8 element_type = *start;
+    uint8 field_id = 0;
+    char* value = palloc(MAX_JSON_STRING_SIZE);
+    memset(value, 0, MAX_JSON_STRING_SIZE);
+    sprintf(value + strlen(value), "%s", "{");
+    while (element_type != 0) {
+      field_id += 1;
+      uint8* next_start = skip_binary_field(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end, element_type);
+      char* field_value = DatumGetCString(thrift_binary_to_json(element_type, start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end));
+      if (field_id == 1) {
+        sprintf(value + strlen(value), "\"%d\":%s", field_id, field_value);
+      } else {
+        sprintf(value + strlen(value), ",\"%d\":%s", field_id, field_value);
+      }
+      start = next_start;
+      element_type = *start;
+    }
+    sprintf(value + strlen(value), "%s", "}");
+    sprintf(retStr, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
     return CStringGetDatum(retStr);
   }
   elog(ERROR, "Unsupported type convert from binary to json");

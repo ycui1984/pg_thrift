@@ -209,21 +209,27 @@ SELECT thrift_binary_in('{"type" : "byte", "value" : "1212"}');
 (1 row)
 
 SELECT thrift_binary_in('{"type": "list", "value": [{"type":"int32", "value":1}, {"type":"int32", "value":2}]}');
-                                 thrift_binary_in                                  
------------------------------------------------------------------------------------
- {"type":"list","value":"[{"type":"int32","value":1},{"type":"int32","value":2}]"}
+                                thrift_binary_in                                 
+---------------------------------------------------------------------------------
+ {"type":"list","value":[{"type":"int32","value":1},{"type":"int32","value":2}]}
 (1 row)
 
 SELECT thrift_binary_in('{"type": "set", "value": [{"type":"int32", "value":3000}, {"type":"int32", "value":4000}]}');
-                                    thrift_binary_in                                    
-----------------------------------------------------------------------------------------
- {"type":"set","value":"[{"type":"int32","value":3000},{"type":"int32","value":4000}]"}
+                                   thrift_binary_in                                   
+--------------------------------------------------------------------------------------
+ {"type":"set","value":[{"type":"int32","value":3000},{"type":"int32","value":4000}]}
 (1 row)
 
 SELECT thrift_binary_in('{"type": "map", "value": [{"type":"int32", "value":3000}, {"type":"string", "value":"hello world"}, {"type":"int32", "value":123}, {"type":"string", "value":"nice"}]}');
-                                                                        thrift_binary_in                                                                        
-----------------------------------------------------------------------------------------------------------------------------------------------------------------
- {"type":"map","value":"[{"type":"int32","value":3000},{"type":"string","value":"hello world"},{"type":"int32","value":123},{"type":"string","value":"nice"}]"}
+                                                                       thrift_binary_in                                                                       
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"type":"map","value":[{"type":"int32","value":3000},{"type":"string","value":"hello world"},{"type":"int32","value":123},{"type":"string","value":"nice"}]}
+(1 row)
+
+SELECT thrift_binary_in('{"type": "struct", "value": {"id": {"type": "int32", "value": 123}, "phones":{"type": "list", "value":[{"type": "string", "value":"12345"}, {"type": "string", "value": "abcdef"}]}}}');
+                                                                        thrift_binary_in                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"type":"struct","value":{"1":{"type":"int32","value":123},"2":{"type":"list","value":[{"type":"string","value":"12345"},{"type":"string","value":"abcdef"}]}}}
 (1 row)
 
 DROP EXTENSION pg_thrift;

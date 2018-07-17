@@ -1182,18 +1182,6 @@ Datum jsonb_to_thrift_binary_helper(char* type, JsonbValue jbv) {
     len = current_len;
     data = list;
   } else if (0 == strcmp(type, "struct")) {
-    // typedef enum
-    // {
-    //  WJB_DONE,  0
-    //  WJB_KEY,   1
-    //  WJB_VALUE, 2
-    //  WJB_ELEM,  3
-    //  WJB_BEGIN_ARRAY, 4
-    //  WJB_END_ARRAY, 5
-    //  WJB_BEGIN_OBJECT, 6
-    //  WJB_END_OBJECT 7
-    // } JsonbIteratorToken;
-    //
     if (jbv.type != jbvBinary) {
       elog(ERROR, "struct jsonb value must be binary");
     }

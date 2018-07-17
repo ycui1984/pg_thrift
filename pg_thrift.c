@@ -1332,7 +1332,11 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
     Datum array_datum = parse_thrift_binary_list_bytea_internal(start, end), element;
     ArrayType* parray = DatumGetArrayTypeP(array_datum);
     bool is_null;
+#if PG_VERSION_NUM >= 90500
+    ArrayIterator iter = array_create_iterator(parray, 0, NULL);
+#else
     ArrayIterator iter = array_create_iterator(parray, 0);
+#endif
     int size = 0;
     char value[1024];
     memset(value, 0, 1024);
@@ -1352,12 +1356,17 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
     sprintf(retStr, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
     return CStringGetDatum(retStr);
   }
+  //TODO: merge into list and set?
   if (type == PG_THRIFT_BINARY_MAP) {
     typeStr = "map";
     Datum array_datum = parse_thrift_binary_map_bytea_internal(start, end), element;
     ArrayType* parray = DatumGetArrayTypeP(array_datum);
     bool is_null;
-    ArrayIterator iter = array_create_iterator(parray, 0);
+#if PG_VERSION_NUM >= 90500
+    ArrayIterator iter = array_create_iterator(parray, 0, NULL);
+#else
+ 	  ArrayIterator iter = array_create_iterator(parray, 0);
+#endif
     int size = 0;
     char value[1024];
     memset(value, 0, 1024);

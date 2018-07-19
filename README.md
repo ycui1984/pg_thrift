@@ -107,6 +107,16 @@ parse_thrift_compact_list_bytea /* get array of bytea from bytea */
 parse_thrift_compact_map_bytea  /* get array of bytea from bytea */
 ```
 
+## Thrift Binary Type
+To ease the use of thrift type, custom data types are created.
+User provide json format as input, thrift bytes are stored. The custom type
+supports binary protocol now, but should be easy to extend to compact protocol.
+```
+thrift_binary_in                /* json to thrift binary bytes */
+thrift_binary_out               /* thrift binary to json bytes */
+```
+
+
 ## API Use Case1. Parse field (using compact protocol):
 ```
 --struct(id=[1, 2, 3, 4, 5])
@@ -165,4 +175,17 @@ Limit  (cost=405.10..405.12 rows=10 width=22)
         Sort Key: (thrift_binary_get_string(x, 1))
         ->  Seq Scan on thrift_no_index  (cost=0.00..189.00 rows=10000 width=22)
 (4 rows)
+```
+
+## API Use Case3. Using custom type:
+```
+postgres=# create table thrift_example(x thrift_binary);
+CREATE TABLE
+postgres=# insert into thrift_example values('{"type" : "int16", "value" : 60}');
+INSERT 0 1
+postgres=# select * from example;
+              x              
+-----------------------------
+ {"type":"int16","value":60}
+(1 row)
 ```

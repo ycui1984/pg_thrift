@@ -1365,7 +1365,7 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
 #if PG_VERSION_NUM >= 90500
     ArrayIterator iter = array_create_iterator(parray, 0, NULL);
 #else
- 	  ArrayIterator iter = array_create_iterator(parray, 0);
+    ArrayIterator iter = array_create_iterator(parray, 0);
 #endif
     int size = 0;
     char value[1024];

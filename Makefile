@@ -4,7 +4,7 @@ OBJS = pg_thrift.o
 DATA = pg_thrift--1.0.sql
 REGRESS = pg_thrift
 
-PG_CPPFLAGS = -g -O2 -Wall -std=c99 -Waddress
+PG_CPPFLAGS = -g -O2 -Wall -std=c99
 SHLIB_LINK =
 
 ifndef PG_CONFIG

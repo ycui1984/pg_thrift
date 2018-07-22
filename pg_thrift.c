@@ -1117,7 +1117,11 @@ Datum jsonb_to_thrift_binary_helper(char* type, JsonbValue jbv) {
       if (r == WJB_BEGIN_ARRAY || r == WJB_END_ARRAY) continue;
       size += 1;
       JsonbValue element_copy = element;
+#if PG_VERSION_NUM < 110000
       Datum thrift_datum = DirectFunctionCall1(jsonb_to_thrift_binary, JsonbGetDatum(JsonbValueToJsonb(&element_copy)));
+#else
+      Datum thrift_datum = DirectFunctionCall1(jsonb_to_thrift_binary, JsonbPGetDatum(JsonbValueToJsonb(&element_copy)));
+#endif
       bytea* one_element_bytea = DatumGetByteaP(thrift_datum);
       if (target_type == -1) {
         *(list + PG_THRIFT_TYPE_LEN) = *VARDATA(one_element_bytea);
@@ -1151,7 +1155,11 @@ Datum jsonb_to_thrift_binary_helper(char* type, JsonbValue jbv) {
       if (r == WJB_BEGIN_ARRAY || r == WJB_END_ARRAY) continue;
       size += 1;
       JsonbValue element_copy = element;
+#if PG_VERSION_NUM < 110000
       Datum thrift_datum = DirectFunctionCall1(jsonb_to_thrift_binary, JsonbGetDatum(JsonbValueToJsonb(&element_copy)));
+#else
+      Datum thrift_datum = DirectFunctionCall1(jsonb_to_thrift_binary, JsonbPGetDatum(JsonbValueToJsonb(&element_copy)));
+#endif
       bytea* one_element_bytea = DatumGetByteaP(thrift_datum);
       if (size == 1) {
         *(list + PG_THRIFT_TYPE_LEN) = *VARDATA(one_element_bytea);
@@ -1198,7 +1206,11 @@ Datum jsonb_to_thrift_binary_helper(char* type, JsonbValue jbv) {
         field_id += 1;
       } else if (r == WJB_VALUE) {
         JsonbValue element_copy = element;
+#if PG_VERSION_NUM < 110000
         Datum thrift_datum = DirectFunctionCall1(jsonb_to_thrift_binary, JsonbGetDatum(JsonbValueToJsonb(&element_copy)));
+#else
+        Datum thrift_datum = DirectFunctionCall1(jsonb_to_thrift_binary, JsonbPGetDatum(JsonbValueToJsonb(&element_copy)));
+#endif
         bytea* one_field = DatumGetByteaP(thrift_datum);
         pData = repalloc(pData, current_len + VARSIZE(one_field) - VARHDRSZ + FIELD_LEN);
         *(pData + current_len) = *VARDATA(one_field);
@@ -1224,7 +1236,11 @@ Datum jsonb_to_thrift_binary_helper(char* type, JsonbValue jbv) {
 }
 
 Datum jsonb_to_thrift_binary(PG_FUNCTION_ARGS) {
+#if PG_VERSION_NUM < 110000
   Jsonb* jsonb = PG_GETARG_JSONB(0);
+#else
+  Jsonb* jsonb = PG_GETARG_JSONB_P(0);
+#endif
   JsonbIterator* it = JsonbIteratorInit(&jsonb->root);
   JsonbValue v, jbv;
   int key_count = 0, value_count = 0;

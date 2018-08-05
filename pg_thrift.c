@@ -44,6 +44,8 @@ PG_FUNCTION_INFO_V1(parse_thrift_binary_list_bytea);
 PG_FUNCTION_INFO_V1(parse_thrift_binary_map_bytea);
 PG_FUNCTION_INFO_V1(thrift_binary_in);
 PG_FUNCTION_INFO_V1(thrift_binary_out);
+PG_FUNCTION_INFO_V1(get_thrift_binary_type);
+PG_FUNCTION_INFO_V1(get_thrift_binary_value);
 
 PG_FUNCTION_INFO_V1(parse_thrift_compact_boolean);
 PG_FUNCTION_INFO_V1(parse_thrift_compact_string);
@@ -1295,6 +1297,69 @@ Datum thrift_binary_in(PG_FUNCTION_ARGS) {
   Datum jsonb_datum = DirectFunctionCall1(jsonb_in, string_datum);
   Datum thrift_datum = DirectFunctionCall1(jsonb_to_thrift_binary, jsonb_datum);
   PG_RETURN_BYTEA_P(DatumGetByteaP(thrift_datum));
+}
+
+Datum get_thrift_binary_type(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  int type = *VARDATA(data);
+  if (type == PG_THRIFT_BINARY_BOOL)
+    return CStringGetDatum("bool");
+  if (type == PG_THRIFT_BINARY_BYTE)
+    return CStringGetDatum("byte");
+  if (type == PG_THRIFT_BINARY_DOUBLE)
+    return CStringGetDatum("double");
+  if (type == PG_THRIFT_BINARY_INT16)
+    return CStringGetDatum("int16");
+  if (type == PG_THRIFT_BINARY_INT32)
+    return CStringGetDatum("int32");
+  if (type == PG_THRIFT_BINARY_INT64)
+    return CStringGetDatum("int64");
+  if (type == PG_THRIFT_BINARY_STRING)
+    return CStringGetDatum("string");
+  if (type == PG_THRIFT_BINARY_STRUCT)
+    return CStringGetDatum("struct");
+  if (type == PG_THRIFT_BINARY_MAP)
+    return CStringGetDatum("map");
+  if (type == PG_THRIFT_BINARY_SET)
+    return CStringGetDatum("set");
+  if (type == PG_THRIFT_BINARY_LIST)
+    return CStringGetDatum("list");
+  elog(ERROR, "Unsupported thrift binary type");
+}
+
+Datum get_thrift_binary_value(PG_FUNCTION_ARGS) {
+  bytea* data = PG_GETARG_BYTEA_P(0);
+  int type = *VARDATA(data);
+  char* retStr = palloc(MAX_JSON_STRING_SIZE);
+  uint8* start = (uint8*)VARDATA(data) + 1;
+  uint8* end = (uint8*)VARDATA(data) + VARSIZE(data) - VARHDRSZ;
+  if (type == PG_THRIFT_BINARY_BOOL) {
+    int64 value = DatumGetBool(parse_thrift_binary_boolean_internal(start, end));
+    sprintf(retStr, "%ld", value);
+  } else if (type == PG_THRIFT_BINARY_INT16) {
+    int16 value = DatumGetInt16(parse_thrift_binary_int16_internal(start, end));
+    sprintf(retStr, "%hd", value);
+  } else if (type == PG_THRIFT_BINARY_INT32) {
+    int32 value = DatumGetInt32(parse_thrift_binary_int32_internal(start, end));
+    sprintf(retStr, "%d", value);
+  } else if (type == PG_THRIFT_BINARY_INT64) {
+    int64 value = DatumGetInt64(parse_thrift_binary_int64_internal(start, end));
+    sprintf(retStr, "%ld", value);
+  } else if (type == PG_THRIFT_BINARY_DOUBLE) {
+    float8 value = DatumGetFloat8(parse_thrift_binary_double_internal(start, end));
+    sprintf(retStr, "%f", value);
+  } else if (type == PG_THRIFT_BINARY_STRING) {
+    char* value = DatumGetCString(parse_thrift_binary_string_internal(start, end));
+    sprintf(retStr, "%s", value);
+  } else if (type == PG_THRIFT_BINARY_BYTE) {
+    bytea* value = DatumGetByteaP(parse_thrift_binary_bytes_internal(start, end));
+    char* tmp = bytes_to_string((uint8*)VARDATA(value), VARSIZE(value) - VARHDRSZ);
+    sprintf(retStr, "%s", tmp);
+  }
+  else {
+    elog(ERROR, "Unsupported thrift binary type");
+  }
+  return CStringGetDatum(retStr);
 }
 
 Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {

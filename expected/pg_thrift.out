@@ -232,4 +232,16 @@ SELECT thrift_binary_in('{"type": "struct", "value": {"id": {"type": "int32", "v
  {"type":"struct","value":{"1":{"type":"int32","value":123},"2":{"type":"list","value":[{"type":"string","value":"12345"},{"type":"string","value":"abcdef"}]}}}
 (1 row)
 
+SELECT get_thrift_binary_type(thrift_binary_in('{"type" : "int32", "value" : 123}'));
+ get_thrift_binary_type 
+------------------------
+ int32
+(1 row)
+
+SELECT get_thrift_binary_value(thrift_binary_in('{"type" : "bool", "value" : 1}'));
+ get_thrift_binary_value 
+-------------------------
+ 1
+(1 row)
+
 DROP EXTENSION pg_thrift;

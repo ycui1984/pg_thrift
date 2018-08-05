@@ -215,6 +215,16 @@ CREATE TYPE thrift_binary (
     LIKE = bytea
 );
 
+CREATE FUNCTION get_thrift_binary_type(thrift_binary)
+    RETURNS cstring
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION get_thrift_binary_value(thrift_binary)
+    RETURNS cstring
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C IMMUTABLE STRICT;
+
 CREATE FUNCTION jsonb_to_thrift_binary(jsonb)
     RETURNS bytea
     AS 'MODULE_PATHNAME'

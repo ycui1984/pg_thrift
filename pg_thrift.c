@@ -1335,26 +1335,26 @@ Datum get_thrift_binary_value(PG_FUNCTION_ARGS) {
   uint8* end = (uint8*)VARDATA(data) + VARSIZE(data) - VARHDRSZ;
   if (type == PG_THRIFT_BINARY_BOOL) {
     int64 value = DatumGetBool(parse_thrift_binary_boolean_internal(start, end));
-    sprintf(retStr, "%ld", value);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "%ld", value);
   } else if (type == PG_THRIFT_BINARY_INT16) {
     int16 value = DatumGetInt16(parse_thrift_binary_int16_internal(start, end));
-    sprintf(retStr, "%hd", value);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "%hd", value);
   } else if (type == PG_THRIFT_BINARY_INT32) {
     int32 value = DatumGetInt32(parse_thrift_binary_int32_internal(start, end));
-    sprintf(retStr, "%d", value);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "%d", value);
   } else if (type == PG_THRIFT_BINARY_INT64) {
     int64 value = DatumGetInt64(parse_thrift_binary_int64_internal(start, end));
-    sprintf(retStr, "%ld", value);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "%ld", value);
   } else if (type == PG_THRIFT_BINARY_DOUBLE) {
     float8 value = DatumGetFloat8(parse_thrift_binary_double_internal(start, end));
-    sprintf(retStr, "%f", value);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "%f", value);
   } else if (type == PG_THRIFT_BINARY_STRING) {
     char* value = DatumGetCString(parse_thrift_binary_string_internal(start, end));
-    sprintf(retStr, "%s", value);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "%s", value);
   } else if (type == PG_THRIFT_BINARY_BYTE) {
     bytea* value = DatumGetByteaP(parse_thrift_binary_bytes_internal(start, end));
     char* tmp = bytes_to_string((uint8*)VARDATA(value), VARSIZE(value) - VARHDRSZ);
-    sprintf(retStr, "%s", tmp);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "%s", tmp);
   }
   else {
     elog(ERROR, "Unsupported thrift binary type");
@@ -1368,44 +1368,44 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
   if (type == PG_THRIFT_BINARY_BOOL) {
     typeStr = "bool";
     int64 value = DatumGetBool(parse_thrift_binary_boolean_internal(start, end));
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":%ld}", typeStr, value);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "{\"type\":\"%s\",\"value\":%ld}", typeStr, value);
     return CStringGetDatum(retStr);
   }
   if (type == PG_THRIFT_BINARY_INT16) {
     typeStr = "int16";
     int16 value = DatumGetInt16(parse_thrift_binary_int16_internal(start, end));
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":%hd}", typeStr, value);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "{\"type\":\"%s\",\"value\":%hd}", typeStr, value);
     return CStringGetDatum(retStr);
   }
   if (type == PG_THRIFT_BINARY_INT32) {
     typeStr = "int32";
     int32 value = DatumGetInt32(parse_thrift_binary_int32_internal(start, end));
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":%d}", typeStr, value);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "{\"type\":\"%s\",\"value\":%d}", typeStr, value);
     return CStringGetDatum(retStr);
   }
   if (type == PG_THRIFT_BINARY_INT64) {
     typeStr = "int64";
     int64 value = DatumGetInt64(parse_thrift_binary_int64_internal(start, end));
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":%ld}", typeStr, value);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "{\"type\":\"%s\",\"value\":%ld}", typeStr, value);
     return CStringGetDatum(retStr);
   }
   if (type == PG_THRIFT_BINARY_DOUBLE) {
     typeStr = "double";
     float8 value = DatumGetFloat8(parse_thrift_binary_double_internal(start, end));
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":%f}", typeStr, value);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "{\"type\":\"%s\",\"value\":%f}", typeStr, value);
     return CStringGetDatum(retStr);
   }
   if (type == PG_THRIFT_BINARY_STRING) {
     typeStr = "string";
     char* value = DatumGetCString(parse_thrift_binary_string_internal(start, end));
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":\"%s\"}", typeStr, value);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "{\"type\":\"%s\",\"value\":\"%s\"}", typeStr, value);
     return CStringGetDatum(retStr);
   }
   if (type == PG_THRIFT_BINARY_BYTE) {
     typeStr = "byte";
     bytea* value = DatumGetByteaP(parse_thrift_binary_bytes_internal(start, end));
     char* tmp = bytes_to_string((uint8*)VARDATA(value), VARSIZE(value) - VARHDRSZ);
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":\"%s\"}", typeStr, tmp);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "{\"type\":\"%s\",\"value\":\"%s\"}", typeStr, tmp);
     return CStringGetDatum(retStr);
   }
   if (type == PG_THRIFT_BINARY_LIST || type == PG_THRIFT_BINARY_SET) {
@@ -1418,26 +1418,40 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
 #else
     ArrayIterator iter = array_create_iterator(parray, 0);
 #endif
-    int size = 0;
-    char value[1024];
-    memset(value, 0, 1024);
-    sprintf(value + strlen(value), "%s", "[");
+    int size = 0, current_size = 1024;
+    char value[current_size];
+    memset(value, 0, current_size);
+    int used = snprintf(value + strlen(value), current_size, "%s", "[");
+    if (used < 0 || used >= current_size) {
+      elog(ERROR, "Error when writing buffer");
+    }
+    current_size -= used;
     while(array_iterate(iter, &element, &is_null)) {
       bytea* element_bytea = DatumGetByteaP(element);
       Datum string_datum = thrift_binary_to_json(*start, (uint8*)VARDATA(element_bytea), (uint8*)VARDATA(element_bytea) + VARSIZE(element_bytea) - VARHDRSZ);
       char* one_element = DatumGetCString(string_datum);
       if (size != 0) {
-        sprintf(value + strlen(value), "%s", ",");
+        used = snprintf(value + strlen(value), current_size, "%s", ",");
+        if (used < 0 || used >= current_size) {
+          elog(ERROR, "Error when writing buffer");
+        }
+        current_size -= used;
       }
-      sprintf(value + strlen(value), "%s", one_element);
+      used = snprintf(value + strlen(value), current_size, "%s", one_element);
+      if (used < 0 || used >= current_size) {
+        elog(ERROR, "Error when writing buffer");
+      }
+      current_size -= used;
       size += 1;
     }
-    sprintf(value + strlen(value), "%s", "]");
+    used = snprintf(value + strlen(value), current_size, "%s", "]");
+    if (used < 0 || used >= current_size) {
+      elog(ERROR, "Error when writting buffer");
+    }
     array_free_iterator(iter);
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
     return CStringGetDatum(retStr);
   }
-  //TODO: merge into list and set?
   if (type == PG_THRIFT_BINARY_MAP) {
     typeStr = "map";
     Datum array_datum = parse_thrift_binary_map_bytea_internal(start, end), element;
@@ -1448,24 +1462,39 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
 #else
     ArrayIterator iter = array_create_iterator(parray, 0);
 #endif
-    int size = 0;
-    char value[1024];
-    memset(value, 0, 1024);
-    sprintf(value + strlen(value), "%s", "[");
+    int size = 0, current_size = 1024;
+    char value[current_size];
+    memset(value, 0, current_size);
+    int used = snprintf(value + strlen(value), current_size, "%s", "[");
+    if (used < 0 || used >= current_size) {
+      elog(ERROR, "Error when writing buffer");
+    }
+    current_size -= used;
     while(array_iterate(iter, &element, &is_null)) {
       bytea* element_bytea = DatumGetByteaP(element);
       int type = (size % 2 == 0)? *start : *(start + PG_THRIFT_TYPE_LEN);
       Datum string_datum = thrift_binary_to_json(type, (uint8*)VARDATA(element_bytea), (uint8*)VARDATA(element_bytea) + VARSIZE(element_bytea) - VARHDRSZ);
       char* one_element = DatumGetCString(string_datum);
       if (size != 0) {
-        sprintf(value + strlen(value), "%s", ",");
+        used = snprintf(value + strlen(value), current_size, "%s", ",");
+        if (used < 0 || used >= current_size) {
+          elog(ERROR, "Error when writing buffer");
+        }
+        current_size -= used;
       }
-      sprintf(value + strlen(value), "%s", one_element);
+      used = snprintf(value + strlen(value), current_size, "%s", one_element);
+      if (used < 0 || used >= current_size) {
+        elog(ERROR, "Error when writing buffer");
+      }
+      current_size -= used;
       size += 1;
     }
-    sprintf(value + strlen(value), "%s", "]");
+    used = snprintf(value + strlen(value), current_size, "%s", "]");
+    if (used < 0 || used >= current_size) {
+      elog(ERROR, "Error when writing buffer");
+    }
     array_free_iterator(iter);
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
     return CStringGetDatum(retStr);
   }
   if (type == PG_THRIFT_BINARY_STRUCT) {
@@ -1474,21 +1503,33 @@ Datum thrift_binary_to_json(int type, uint8* start, uint8* end) {
     uint8 field_id = 0;
     char* value = palloc(MAX_JSON_STRING_SIZE);
     memset(value, 0, MAX_JSON_STRING_SIZE);
-    sprintf(value + strlen(value), "%s", "{");
+    int current_size = MAX_JSON_STRING_SIZE;
+    int used = snprintf(value + strlen(value), current_size, "%s", "{");
+    if (used < 0 || used >= current_size) {
+      elog(ERROR, "Error when writing buffer");
+    }
+    current_size -= used;
     while (element_type != 0) {
       field_id += 1;
       uint8* next_start = skip_binary_field(start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end, element_type);
       char* field_value = DatumGetCString(thrift_binary_to_json(element_type, start + PG_THRIFT_TYPE_LEN + PG_THRIFT_FIELD_LEN, end));
       if (field_id == 1) {
-        sprintf(value + strlen(value), "\"%d\":%s", field_id, field_value);
+        used = snprintf(value + strlen(value), current_size, "\"%d\":%s", field_id, field_value);
       } else {
-        sprintf(value + strlen(value), ",\"%d\":%s", field_id, field_value);
+        used = snprintf(value + strlen(value), current_size, ",\"%d\":%s", field_id, field_value);
       }
+      if (used < 0 || used >= current_size) {
+        elog(ERROR, "Error when writing buffer");
+      }
+      current_size -= used;
       start = next_start;
       element_type = *start;
     }
-    sprintf(value + strlen(value), "%s", "}");
-    sprintf(retStr, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
+    used = snprintf(value + strlen(value), current_size, "%s", "}");
+    if (used < 0 || used >= current_size) {
+      elog(ERROR, "Error when writing buffer");
+    }
+    snprintf(retStr, MAX_JSON_STRING_SIZE, "{\"type\":\"%s\",\"value\":%s}", typeStr, value);
     return CStringGetDatum(retStr);
   }
   elog(ERROR, "Unsupported type convert from binary to json");
